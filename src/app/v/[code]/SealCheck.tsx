@@ -104,10 +104,13 @@ export default function SealCheck({ code }: { code: string }) {
                 </div>
               </div>
               <p style={{ margin: '10px 0 0', fontSize: 11 }}>
-                Bạn không cần tin lời người bán — hệ thống băm lại media và đối chiếu với chữ ký gốc lưu
-                tại Nguyên Bản.{' '}
+                Bạn không cần tin lời người bán — hệ thống tự băm lại media và đối chiếu với chữ ký gốc
+                lưu tại Nguyên Bản.
+              </p>
+              <p style={{ margin: '6px 0 0', fontSize: 10.5, color: 'var(--ink-mute)' }}>
+                Dành cho người rành kỹ thuật:{' '}
                 <a href="/api/pubkey" target="_blank" rel="noreferrer">
-                  Khoá công khai để tự kiểm →
+                  khoá công khai để tự kiểm độc lập ↗
                 </a>
               </p>
             </>

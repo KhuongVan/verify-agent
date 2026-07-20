@@ -20,9 +20,6 @@ export default function Home() {
         <Link className="btn" href="/upload">
           📷 Quay & niêm phong →
         </Link>
-        <a className="btn ghost" href="/api/pubkey">
-          Xem khoá công khai
-        </a>
       </div>
 
       <div className="notice" style={{ marginTop: 28 }}>
