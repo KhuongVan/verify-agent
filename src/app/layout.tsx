@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Nguyên Bản — Bằng chứng quay thật',
-  description: 'Xác thực media quay thật, không cắt ghép, cho người bán hàng hiệu.',
+  title: 'Ảnh Thật — Cam kết hình ảnh nguyên bản',
+  description: 'Cam kết hình ảnh nguyên bản — bằng chứng quay thật, không cắt ghép.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -1,56 +1,62 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { Proof, StoreDriver } from '../store';
+import type { Album, Item, ItemBytes, StoreDriver } from '../store';
 
 /**
- * Driver local — lưu bằng filesystem tại .data/ (dùng cho dev, zero-config).
- * KHÔNG bền trên serverless (Vercel) — production dùng driver Supabase.
+ * Driver local — lưu bằng filesystem tại .data/ (dev, zero-config).
+ * Album metadata: .data/albums.json. Media: .data/media/<code>/<id>.<ext>.
+ * KHÔNG bền trên serverless — production dùng driver Supabase.
  */
 
 const DATA_DIR = path.join(process.cwd(), '.data');
 const MEDIA_DIR = path.join(DATA_DIR, 'media');
-const DB_PATH = path.join(DATA_DIR, 'proofs.json');
+const DB_PATH = path.join(DATA_DIR, 'albums.json');
 
 function ensure(): void {
   fs.mkdirSync(MEDIA_DIR, { recursive: true });
   if (!fs.existsSync(DB_PATH)) fs.writeFileSync(DB_PATH, '[]');
 }
 
-function readAll(): Proof[] {
+function readAll(): Album[] {
   ensure();
   try {
-    return JSON.parse(fs.readFileSync(DB_PATH, 'utf8')) as Proof[];
+    return JSON.parse(fs.readFileSync(DB_PATH, 'utf8')) as Album[];
   } catch {
     return [];
   }
 }
 
-function writeAll(list: Proof[]): void {
+function writeAll(list: Album[]): void {
   ensure();
   fs.writeFileSync(DB_PATH, JSON.stringify(list, null, 2));
 }
 
-function mediaPath(p: Pick<Proof, 'code' | 'ext'>): string {
-  return path.join(MEDIA_DIR, `${p.code}.${p.ext}`);
+function itemPath(code: string, item: Pick<Item, 'id' | 'ext'>): string {
+  return path.join(MEDIA_DIR, code, `${item.id}.${item.ext}`);
 }
 
 export function createLocalDriver(): StoreDriver {
   return {
-    async saveProof(proof, bytes) {
+    async saveAlbum(album: Album, files: ItemBytes[]) {
       ensure();
-      fs.writeFileSync(mediaPath(proof), bytes);
+      fs.mkdirSync(path.join(MEDIA_DIR, album.code), { recursive: true });
+      for (const f of files) {
+        const item = album.items.find((i) => i.id === f.id);
+        if (!item) continue;
+        fs.writeFileSync(itemPath(album.code, item), f.bytes);
+      }
       const list = readAll();
-      list.push(proof);
+      list.push(album);
       writeAll(list);
     },
-    async getProof(code) {
-      return readAll().find((p) => p.code === code) ?? null;
+    async getAlbum(code) {
+      return readAll().find((a) => a.code === code) ?? null;
     },
-    async getMediaBytes(proof) {
-      return fs.readFileSync(mediaPath(proof));
+    async getItemBytes(code, item) {
+      return fs.readFileSync(itemPath(code, item));
     },
     async countByShop(shopName) {
-      return readAll().filter((p) => p.shopName === shopName).length;
+      return readAll().filter((a) => a.shopName === shopName).length;
     },
   };
 }

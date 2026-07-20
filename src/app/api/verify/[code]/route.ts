@@ -1,49 +1,51 @@
 import { NextResponse } from 'next/server';
 import { canonicalString, sha256Hex, verify, type SealedFacts } from '@/lib/seal';
-import { getMediaBytes, getProof } from '@/lib/store';
+import { getAlbum, getItemBytes } from '@/lib/store';
 
 export const runtime = 'nodejs';
 
 /**
- * Kiểm chứng độc lập: băm LẠI media đang lưu, dựng lại canonical, kiểm chữ ký.
- * Trả về phán quyết để trang xác thực (hoặc bên thứ ba) tự đối chiếu —
- * "đừng tin lời người bán, tự kiểm".
+ * Kiểm chứng độc lập TỪNG mục trong album: băm lại media, kiểm chữ ký.
+ * Trả phán quyết tổng (intact khi mọi mục nguyên vẹn) + chi tiết từng mục.
  */
 export async function GET(_req: Request, { params }: { params: { code: string } }) {
-  const proof = await getProof(params.code);
-  if (!proof) {
+  const album = await getAlbum(params.code);
+  if (!album) {
     return NextResponse.json({ error: 'Không tìm thấy bằng chứng.' }, { status: 404 });
   }
 
-  let hashMatch = false;
-  try {
-    const recomputed = sha256Hex(await getMediaBytes(proof));
-    hashMatch = recomputed === proof.sha256;
-  } catch {
-    hashMatch = false;
-  }
+  const perItem = await Promise.all(
+    album.items.map(async (item) => {
+      let contentMatches = false;
+      try {
+        const recomputed = sha256Hex(await getItemBytes(album.code, item));
+        contentMatches = recomputed === item.sha256;
+      } catch {
+        contentMatches = false;
+      }
+      const facts: SealedFacts = {
+        code: album.code,
+        itemId: item.id,
+        sha256: item.sha256,
+        sizeBytes: item.sizeBytes,
+        mimeType: item.mimeType,
+        sealedAt: album.sealedAt,
+      };
+      const signatureValid = verify(facts, item.signatureB64);
+      return { id: item.id, intact: contentMatches && signatureValid, signatureValid, contentMatches };
+    }),
+  );
 
-  const facts: SealedFacts = {
-    code: proof.code,
-    sha256: proof.sha256,
-    sizeBytes: proof.sizeBytes,
-    mimeType: proof.mimeType,
-    sealedAt: proof.sealedAt,
-  };
-  const signatureValid = verify(facts, proof.signatureB64);
-  const intact = hashMatch && signatureValid;
+  const okCount = perItem.filter((p) => p.intact).length;
+  const allIntact = okCount === perItem.length;
 
   return NextResponse.json({
-    code: proof.code,
-    verdict: intact ? 'intact' : 'tampered',
-    checks: {
-      signatureValid,
-      contentMatches: hashMatch,
-      editTraces: intact ? 'none' : 'detected',
-    },
-    sha256: proof.sha256,
-    keyId: proof.keyId,
-    sealedAt: proof.sealedAt,
-    canonical: canonicalString(facts),
+    code: album.code,
+    verdict: allIntact ? 'intact' : 'tampered',
+    total: perItem.length,
+    intactCount: okCount,
+    keyId: album.items[0]?.keyId ?? null,
+    sealedAt: album.sealedAt,
+    items: perItem,
   });
 }

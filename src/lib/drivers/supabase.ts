@@ -1,64 +1,36 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { Proof, StoreDriver } from '../store';
+import type { Album, Item, ItemBytes, StoreDriver } from '../store';
 
 /**
- * Driver Supabase — metadata ở Postgres (bảng `proofs`), media ở Storage
- * (bucket `media`, để PRIVATE). Chỉ chạy phía server bằng service role key.
- * Xem supabase/schema.sql để tạo bảng + bucket.
+ * Driver Supabase — metadata album ở Postgres (bảng `albums`, cột `items` JSONB),
+ * media ở Storage bucket `media` (private, path <code>/<id>.<ext>).
+ * Chỉ chạy phía server bằng service role key. Xem supabase/schema.sql.
  */
 
 const BUCKET = 'media';
 
 type Row = {
   code: string;
-  mime_type: string;
-  ext: string;
-  size_bytes: number;
-  sha256: string;
   sealed_at: string;
-  signature_b64: string;
-  key_id: string;
-  seller_note: string | null;
-  client_captured_at: string | null;
-  client_location: string | null;
-  liveness_code: string | null;
+  items: Item[];
   shop_name: string | null;
+  seller_note: string | null;
+  client_location: string | null;
 };
 
-function rowToProof(r: Row): Proof {
+function rowToAlbum(r: Row): Album {
   return {
     code: r.code,
-    mimeType: r.mime_type,
-    ext: r.ext,
-    sizeBytes: Number(r.size_bytes),
-    sha256: r.sha256,
     sealedAt: r.sealed_at,
-    signatureB64: r.signature_b64,
-    keyId: r.key_id,
-    sellerNote: r.seller_note ?? undefined,
-    clientCapturedAt: r.client_captured_at ?? undefined,
-    clientLocation: r.client_location ?? undefined,
-    livenessCode: r.liveness_code ?? undefined,
+    items: r.items ?? [],
     shopName: r.shop_name ?? undefined,
+    sellerNote: r.seller_note ?? undefined,
+    clientLocation: r.client_location ?? undefined,
   };
 }
 
-function proofToRow(p: Proof): Row {
-  return {
-    code: p.code,
-    mime_type: p.mimeType,
-    ext: p.ext,
-    size_bytes: p.sizeBytes,
-    sha256: p.sha256,
-    sealed_at: p.sealedAt,
-    signature_b64: p.signatureB64,
-    key_id: p.keyId,
-    seller_note: p.sellerNote ?? null,
-    client_captured_at: p.clientCapturedAt ?? null,
-    client_location: p.clientLocation ?? null,
-    liveness_code: p.livenessCode ?? null,
-    shop_name: p.shopName ?? null,
-  };
+function objectPath(code: string, item: Pick<Item, 'id' | 'ext'>): string {
+  return `${code}/${item.id}.${item.ext}`;
 }
 
 export function createSupabaseDriver(): StoreDriver {
@@ -68,43 +40,56 @@ export function createSupabaseDriver(): StoreDriver {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const objectPath = (p: Pick<Proof, 'code' | 'ext'>) => `${p.code}.${p.ext}`;
-
   return {
-    async saveProof(proof, bytes) {
-      const up = await supabase.storage.from(BUCKET).upload(objectPath(proof), bytes, {
-        contentType: proof.mimeType,
-        upsert: false,
-      });
-      if (up.error) throw new Error(`Storage upload lỗi: ${up.error.message}`);
+    async saveAlbum(album: Album, files: ItemBytes[]) {
+      const uploaded: string[] = [];
+      for (const f of files) {
+        const item = album.items.find((i) => i.id === f.id);
+        if (!item) continue;
+        const key = objectPath(album.code, item);
+        const up = await supabase.storage
+          .from(BUCKET)
+          .upload(key, f.bytes, { contentType: item.mimeType, upsert: false });
+        if (up.error) {
+          if (uploaded.length) await supabase.storage.from(BUCKET).remove(uploaded);
+          throw new Error(`Storage upload lỗi: ${up.error.message}`);
+        }
+        uploaded.push(key);
+      }
 
-      const ins = await supabase.from('proofs').insert(proofToRow(proof));
+      const ins = await supabase.from('albums').insert({
+        code: album.code,
+        sealed_at: album.sealedAt,
+        items: album.items,
+        shop_name: album.shopName ?? null,
+        seller_note: album.sellerNote ?? null,
+        client_location: album.clientLocation ?? null,
+      });
       if (ins.error) {
-        // Rollback file nếu ghi metadata hỏng, tránh rác mồ côi.
-        await supabase.storage.from(BUCKET).remove([objectPath(proof)]);
+        if (uploaded.length) await supabase.storage.from(BUCKET).remove(uploaded);
         throw new Error(`Ghi metadata lỗi: ${ins.error.message}`);
       }
     },
 
-    async getProof(code) {
+    async getAlbum(code) {
       const { data, error } = await supabase
-        .from('proofs')
+        .from('albums')
         .select('*')
         .eq('code', code)
         .maybeSingle();
       if (error) throw new Error(`Đọc metadata lỗi: ${error.message}`);
-      return data ? rowToProof(data as Row) : null;
+      return data ? rowToAlbum(data as Row) : null;
     },
 
-    async getMediaBytes(proof) {
-      const { data, error } = await supabase.storage.from(BUCKET).download(objectPath(proof));
+    async getItemBytes(code, item) {
+      const { data, error } = await supabase.storage.from(BUCKET).download(objectPath(code, item));
       if (error || !data) throw new Error(`Tải media lỗi: ${error?.message ?? 'không có dữ liệu'}`);
       return Buffer.from(await data.arrayBuffer());
     },
 
     async countByShop(shopName) {
       const { count, error } = await supabase
-        .from('proofs')
+        .from('albums')
         .select('code', { count: 'exact', head: true })
         .eq('shop_name', shopName);
       if (error) throw new Error(`Đếm lỗi: ${error.message}`);

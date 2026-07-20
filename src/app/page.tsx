@@ -1,31 +1,369 @@
-import Link from 'next/link';
+'use client';
 
-export default function Home() {
+import Link from 'next/link';
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+/**
+ * Trang chủ = màn hình chụp kiểu camera điện thoại.
+ * Chụp ảnh / quay video trực tiếp (không nhận file thư viện), gom nhiều mục,
+ * bấm "Gửi" -> niêm phong cả loạt -> trả về một link để gửi khách.
+ */
+
+type Facing = 'environment' | 'user';
+type Mode = 'photo' | 'video';
+type Phase = 'init' | 'live' | 'review' | 'sealing' | 'done';
+type Shot = { id: string; blob: Blob; url: string; kind: Mode };
+
+function pickMime(): string {
+  const cands = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'];
+  for (const c of cands) {
+    if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(c)) return c;
+  }
+  return '';
+}
+
+export default function CameraHome() {
+  const liveRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<BlobPart[]>([]);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const shotsRef = useRef<Shot[]>([]);
+  const idRef = useRef(0);
+
+  const [facing, setFacing] = useState<Facing>('environment');
+  const [mode, setMode] = useState<Mode>('photo');
+  const [phase, setPhase] = useState<Phase>('init');
+  const [recording, setRecording] = useState(false);
+  const [seconds, setSeconds] = useState(0);
+  const [shots, setShots] = useState<Shot[]>([]);
+  const [flash, setFlash] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [shopName, setShopName] = useState('');
+  const [note, setNote] = useState('');
+  const [result, setResult] = useState<{ code: string; url: string; count: number } | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  shotsRef.current = shots;
+
+  const stopStream = useCallback(() => {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+  }, []);
+
+  const startCamera = useCallback(async (want: Facing) => {
+    setError(null);
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setError('Trình duyệt không hỗ trợ camera, hoặc trang không chạy trên HTTPS/localhost.');
+      return;
+    }
+    stopStream();
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: want },
+        audio: true,
+      });
+      streamRef.current = stream;
+      if (liveRef.current) {
+        liveRef.current.srcObject = stream;
+        await liveRef.current.play().catch(() => {});
+      }
+      setPhase('live');
+    } catch (e) {
+      const name = (e as DOMException)?.name;
+      if (name === 'NotAllowedError') setError('Bạn đã từ chối quyền camera. Hãy cho phép rồi thử lại.');
+      else if (name === 'NotFoundError') setError('Không tìm thấy camera trên thiết bị.');
+      else setError('Không mở được camera. Kiểm tra quyền truy cập và thử lại.');
+    }
+  }, [stopStream]);
+
+  useEffect(() => {
+    startCamera('environment');
+    return () => {
+      stopStream();
+      if (timerRef.current) clearInterval(timerRef.current);
+      shotsRef.current.forEach((s) => URL.revokeObjectURL(s.url));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function addShot(blob: Blob, kind: Mode) {
+    const url = URL.createObjectURL(blob);
+    setShots((prev) => [...prev, { id: `s${idRef.current++}`, blob, url, kind }]);
+  }
+
+  function flip() {
+    const next: Facing = facing === 'environment' ? 'user' : 'environment';
+    setFacing(next);
+    startCamera(next);
+  }
+
+  function takePhoto() {
+    const video = liveRef.current;
+    if (!video || !video.videoWidth) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    setFlash(true);
+    setTimeout(() => setFlash(false), 160);
+    canvas.toBlob((blob) => blob && addShot(blob, 'photo'), 'image/jpeg', 0.92);
+  }
+
+  function startRecording() {
+    const stream = streamRef.current;
+    if (!stream) return;
+    chunksRef.current = [];
+    const mime = pickMime();
+    let rec: MediaRecorder;
+    try {
+      rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+    } catch {
+      setError('Thiết bị không hỗ trợ ghi hình trên trình duyệt này.');
+      return;
+    }
+    rec.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
+    };
+    rec.onstop = () => {
+      const blob = new Blob(chunksRef.current, { type: rec.mimeType || 'video/webm' });
+      addShot(blob, 'video');
+    };
+    recorderRef.current = rec;
+    rec.start();
+    setRecording(true);
+    setSeconds(0);
+    timerRef.current = setInterval(() => {
+      setSeconds((s) => {
+        if (s + 1 >= 60) stopRecording();
+        return s + 1;
+      });
+    }, 1000);
+  }
+
+  function stopRecording() {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    const rec = recorderRef.current;
+    if (rec && rec.state !== 'inactive') rec.stop();
+    setRecording(false);
+  }
+
+  function onShutter() {
+    if (mode === 'photo') takePhoto();
+    else if (recording) stopRecording();
+    else startRecording();
+  }
+
+  function removeShot(id: string) {
+    setShots((prev) => {
+      const s = prev.find((x) => x.id === id);
+      if (s) URL.revokeObjectURL(s.url);
+      return prev.filter((x) => x.id !== id);
+    });
+  }
+
+  async function send() {
+    if (shots.length === 0) return;
+    setPhase('sealing');
+    setError(null);
+    const data = new FormData();
+    for (const s of shots) {
+      const ext = s.kind === 'photo' ? 'jpg' : s.blob.type.split(';')[0] === 'video/mp4' ? 'mp4' : 'webm';
+      const type = s.kind === 'photo' ? 'image/jpeg' : s.blob.type.split(';')[0] || 'video/webm';
+      data.append('media', new File([s.blob], `${s.id}.${ext}`, { type }));
+    }
+    data.set('capturedAt', new Date().toISOString());
+    if (shopName.trim()) data.set('shopName', shopName.trim());
+    if (note.trim()) data.set('note', note.trim());
+
+    try {
+      const res = await fetch('/api/seal', { method: 'POST', body: data });
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json.error || 'Gửi thất bại.');
+        setPhase('review');
+      } else {
+        setResult(json);
+        setPhase('done');
+        stopStream();
+        shots.forEach((s) => URL.revokeObjectURL(s.url));
+      }
+    } catch {
+      setError('Không kết nối được máy chủ.');
+      setPhase('review');
+    }
+  }
+
+  function startNew() {
+    setShots([]);
+    setResult(null);
+    setShopName('');
+    setNote('');
+    setCopied(false);
+    startCamera(facing);
+  }
+
+  async function copyLink() {
+    if (!result) return;
+    const full = `${window.location.origin}${result.url}`;
+    try {
+      await navigator.clipboard.writeText(full);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const mmss = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+
+  // ---- Màn hình kết quả ----
+  if (phase === 'done' && result) {
+    const full = typeof window !== 'undefined' ? `${window.location.origin}${result.url}` : result.url;
+    return (
+      <main className="done-screen">
+        <div className="done-card">
+          <img src="/logo-mark.png" alt="Ảnh Thật" className="brand-logo lg" style={{ display: 'block', margin: '0 auto 14px' }} />
+          <h1 className="title" style={{ textAlign: 'center' }}>Đã niêm phong {result.count} mục</h1>
+          <p className="muted" style={{ textAlign: 'center' }}>
+            Gửi link này cho khách — họ mở ra sẽ lướt xem album đã xác thực.
+          </p>
+          <div className="link-box">
+            <span className="link-text">{full}</span>
+            <button className="btn" onClick={copyLink}>
+              {copied ? '✓ Đã chép' : 'Chép link'}
+            </button>
+          </div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 16, justifyContent: 'center' }}>
+            <Link className="btn ghost" href={result.url}>
+              Xem trước
+            </Link>
+            <button className="btn ghost" onClick={startNew}>
+              + Album mới
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
-    <main className="page">
-      <div className="brandline">
-        <div className="mark">🔒</div>
-        <div className="brandname">
-          Nguyên<b>Bản</b>
+    <div className="cam-shell">
+      {flash && <div className="cam-flash" />}
+
+      <video ref={liveRef} muted playsInline autoPlay className="viewfinder" />
+
+      {/* Top bar */}
+      <div className="cam-top">
+        <div className="cam-brand"><img src="/logo-mark.png" alt="Ảnh Thật" className="brand-logo" /><span>Ảnh Thật</span></div>
+        {recording ? (
+          <div className="cam-rec"><span className="rec-dot" /> {mmss}</div>
+        ) : (
+          <button className="cam-flip" onClick={flip} aria-label="Đổi camera">⟲</button>
+        )}
+      </div>
+
+      {error && <div className="cam-error">{error} <button onClick={() => startCamera(facing)}>Thử lại</button></div>}
+
+      {phase === 'init' && !error && <div className="cam-hint">Đang mở camera…</div>}
+
+      {/* Bottom controls */}
+      <div className="cam-bottom">
+        {!recording && (
+          <div className="mode-toggle">
+            <button className={mode === 'photo' ? 'on' : ''} onClick={() => setMode('photo')}>Ảnh</button>
+            <button className={mode === 'video' ? 'on' : ''} onClick={() => setMode('video')}>Video</button>
+          </div>
+        )}
+
+        <div className="cam-row">
+          {/* Tray */}
+          <button
+            className="tray"
+            onClick={() => shots.length && setPhase('review')}
+            aria-label="Xem các mục đã chụp"
+            disabled={shots.length === 0}
+          >
+            {shots.length > 0 ? (
+              <>
+                {shots[shots.length - 1].kind === 'photo' ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={shots[shots.length - 1].url} alt="" />
+                ) : (
+                  <video src={shots[shots.length - 1].url} muted />
+                )}
+                <span className="tray-count">{shots.length}</span>
+              </>
+            ) : null}
+          </button>
+
+          {/* Shutter */}
+          <button
+            className={`shutter ${mode === 'video' ? 'video' : ''} ${recording ? 'rec' : ''}`}
+            onClick={onShutter}
+            disabled={phase === 'init'}
+            aria-label={mode === 'photo' ? 'Chụp' : recording ? 'Dừng quay' : 'Quay'}
+          >
+            <span />
+          </button>
+
+          {/* Send */}
+          <button
+            className={`send ${shots.length ? 'show' : ''}`}
+            onClick={() => setPhase('review')}
+            disabled={shots.length === 0}
+          >
+            Gửi{shots.length ? ` ${shots.length}` : ''}
+          </button>
         </div>
       </div>
 
-      <h1 className="title">Bằng chứng quay thật, không cắt ghép</h1>
-      <p className="muted">
-        Quay sản phẩm trực tiếp trong app, server niêm phong bằng chữ ký số Ed25519 và sinh trang xác
-        thực công khai để gửi cho khách.
-      </p>
+      {/* Review sheet */}
+      {(phase === 'review' || phase === 'sealing') && (
+        <div className="sheet-backdrop" onClick={() => phase === 'review' && setPhase('live')}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="sheet-handle" />
+            <h2 className="sheet-title">Xem lại {shots.length} mục</h2>
+            <div className="thumb-grid">
+              {shots.map((s) => (
+                <div className="thumb" key={s.id}>
+                  {s.kind === 'photo' ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={s.url} alt="" />
+                  ) : (
+                    <video src={s.url} muted playsInline />
+                  )}
+                  <button className="thumb-x" onClick={() => removeShot(s.id)} aria-label="Xoá">×</button>
+                  {s.kind === 'video' && <span className="thumb-vid">▶</span>}
+                </div>
+              ))}
+            </div>
 
-      <div style={{ display: 'flex', gap: 10, marginTop: 24, flexWrap: 'wrap' }}>
-        <Link className="btn" href="/upload">
-          📷 Quay & niêm phong →
-        </Link>
-      </div>
+            <div className="field">
+              <label htmlFor="shopName">Tên shop (tuỳ chọn)</label>
+              <input id="shopName" type="text" value={shopName} onChange={(e) => setShopName(e.target.value)} placeholder="Lux House · Sài Gòn" />
+            </div>
+            <div className="field">
+              <label htmlFor="note">Mô tả (tuỳ chọn — hiển thị tách bạch)</label>
+              <textarea id="note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Chanel Classic Flap Medium, fullset box & card..." />
+            </div>
 
-      <div className="notice" style={{ marginTop: 28 }}>
-        <b>Trạng thái:</b> M1 lưu tạm bằng filesystem (<code>.data/</code>) và tự sinh khoá ký. Đây là
-        stand-in cho Supabase + Mux + KMS ở M2/M3 — chữ ký các hàm store đã tách sẵn để thay không đau.
-      </div>
-    </main>
+            {error && <div className="notice err" style={{ marginBottom: 12 }}>{error}</div>}
+
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button className="btn ghost" onClick={() => setPhase('live')}>Chụp thêm</button>
+              <button className="btn" style={{ flex: 1 }} onClick={send} disabled={phase === 'sealing' || shots.length === 0}>
+                {phase === 'sealing' ? 'Đang niêm phong…' : `🔒 Tạo link (${shots.length})`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

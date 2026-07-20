@@ -1,33 +1,43 @@
 /**
  * store.ts — API lưu trữ thống nhất, chọn driver theo môi trường.
  *
- * Có đủ NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY  -> driver Supabase
- * (Postgres + Storage). Không có -> driver local (filesystem, cho dev).
+ * Mô hình ALBUM: một mã (code) = một link, chứa NHIỀU mục (ảnh/video). Mỗi mục
+ * được ký số riêng để dấu niêm phong hoạt động độc lập từng mục.
  *
- * Phần còn lại của app chỉ gọi các hàm dưới đây, không biết driver nào đang chạy.
+ * Có đủ NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY -> driver Supabase.
+ * Không có -> driver local (filesystem, cho dev).
  */
 
-export type Proof = {
-  code: string;
+export type MediaKind = 'photo' | 'video';
+
+export type Item = {
+  id: string; // duy nhất trong album, ví dụ "i0", "i1"
+  kind: MediaKind;
   mimeType: string;
   ext: string;
   sizeBytes: number;
   sha256: string;
-  sealedAt: string; // server timestamp (ISO)
   signatureB64: string;
   keyId: string;
-  // Thông tin do client khai — KHÔNG được ký, hiển thị tách bạch ("người bán nói").
-  sellerNote?: string;
-  clientCapturedAt?: string;
-  clientLocation?: string;
-  livenessCode?: string;
-  shopName?: string;
 };
 
+export type Album = {
+  code: string;
+  sealedAt: string; // server timestamp (ISO)
+  items: Item[];
+  // Do client khai — KHÔNG được ký, hiển thị tách bạch ("người bán nói").
+  shopName?: string;
+  sellerNote?: string;
+  clientLocation?: string;
+};
+
+/** Bytes kèm theo từng mục khi lưu album. */
+export type ItemBytes = { id: string; bytes: Buffer };
+
 export interface StoreDriver {
-  saveProof(proof: Proof, bytes: Buffer): Promise<void>;
-  getProof(code: string): Promise<Proof | null>;
-  getMediaBytes(proof: Proof): Promise<Buffer>;
+  saveAlbum(album: Album, files: ItemBytes[]): Promise<void>;
+  getAlbum(code: string): Promise<Album | null>;
+  getItemBytes(code: string, item: Item): Promise<Buffer>;
   countByShop(shopName: string): Promise<number>;
 }
 
@@ -49,16 +59,16 @@ function driver(): Promise<StoreDriver> {
   return driverPromise;
 }
 
-export async function saveProof(proof: Proof, bytes: Buffer): Promise<void> {
-  return (await driver()).saveProof(proof, bytes);
+export async function saveAlbum(album: Album, files: ItemBytes[]): Promise<void> {
+  return (await driver()).saveAlbum(album, files);
 }
 
-export async function getProof(code: string): Promise<Proof | null> {
-  return (await driver()).getProof(code);
+export async function getAlbum(code: string): Promise<Album | null> {
+  return (await driver()).getAlbum(code);
 }
 
-export async function getMediaBytes(proof: Proof): Promise<Buffer> {
-  return (await driver()).getMediaBytes(proof);
+export async function getItemBytes(code: string, item: Item): Promise<Buffer> {
+  return (await driver()).getItemBytes(code, item);
 }
 
 export async function countByShop(shopName: string): Promise<number> {
