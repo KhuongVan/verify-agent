@@ -1,15 +1,14 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { getProof } from '@/lib/store';
-import { countByShop } from '@/lib/store';
+import { countByShop, getProof } from '@/lib/store';
 import { formatBytes, formatVN, isVideo } from '@/lib/util';
 import SealCheck from './SealCheck';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export function generateMetadata({ params }: { params: { code: string } }): Metadata {
-  const proof = getProof(params.code);
+export async function generateMetadata({ params }: { params: { code: string } }): Promise<Metadata> {
+  const proof = await getProof(params.code);
   if (!proof) return { title: 'Không tìm thấy bằng chứng — Nguyên Bản' };
   return {
     title: `Bằng chứng quay thật · ${proof.code} — Nguyên Bản`,
@@ -17,12 +16,12 @@ export function generateMetadata({ params }: { params: { code: string } }): Meta
   };
 }
 
-export default function VerifyPage({ params }: { params: { code: string } }) {
-  const proof = getProof(params.code);
+export default async function VerifyPage({ params }: { params: { code: string } }) {
+  const proof = await getProof(params.code);
   if (!proof) notFound();
 
   const shopName = proof.shopName ?? 'Shop demo';
-  const shopCount = countByShop(shopName);
+  const shopCount = await countByShop(shopName);
   const avatar = shopName.trim().charAt(0).toUpperCase() || 'S';
 
   return (

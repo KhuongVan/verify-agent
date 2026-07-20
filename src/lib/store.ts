@@ -1,19 +1,11 @@
-import fs from 'node:fs';
-import path from 'node:path';
-
 /**
- * store.ts — lớp lưu trữ (M1 stand-in).
+ * store.ts — API lưu trữ thống nhất, chọn driver theo môi trường.
  *
- * Metadata: file JSON tại .data/proofs.json.
- * Media gốc: .data/media/<code>.<ext>.
+ * Có đủ NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY  -> driver Supabase
+ * (Postgres + Storage). Không có -> driver local (filesystem, cho dev).
  *
- * ĐÂY LÀ ĐƯỜNG NỐI để M2/M3 thay bằng Supabase (Postgres) + Mux/R2. Chỉ cần
- * giữ nguyên chữ ký các hàm bên dưới, phần còn lại của app không phải sửa.
+ * Phần còn lại của app chỉ gọi các hàm dưới đây, không biết driver nào đang chạy.
  */
-
-const DATA_DIR = path.join(process.cwd(), '.data');
-const MEDIA_DIR = path.join(DATA_DIR, 'media');
-const DB_PATH = path.join(DATA_DIR, 'proofs.json');
 
 export type Proof = {
   code: string;
@@ -28,52 +20,47 @@ export type Proof = {
   sellerNote?: string;
   clientCapturedAt?: string;
   clientLocation?: string;
-  // Placeholder cho M2 (liveness). Chưa dùng để phán quyết ở M1.
   livenessCode?: string;
-  // Danh tính shop (M3 sẽ thay bằng bảng shop thật).
   shopName?: string;
 };
 
-function ensure(): void {
-  fs.mkdirSync(MEDIA_DIR, { recursive: true });
-  if (!fs.existsSync(DB_PATH)) fs.writeFileSync(DB_PATH, '[]');
+export interface StoreDriver {
+  saveProof(proof: Proof, bytes: Buffer): Promise<void>;
+  getProof(code: string): Promise<Proof | null>;
+  getMediaBytes(proof: Proof): Promise<Buffer>;
+  countByShop(shopName: string): Promise<number>;
 }
 
-function readAll(): Proof[] {
-  ensure();
-  try {
-    return JSON.parse(fs.readFileSync(DB_PATH, 'utf8')) as Proof[];
-  } catch {
-    return [];
+export function storeMode(): 'supabase' | 'local' {
+  return process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
+    ? 'supabase'
+    : 'local';
+}
+
+let driverPromise: Promise<StoreDriver> | null = null;
+
+function driver(): Promise<StoreDriver> {
+  if (!driverPromise) {
+    driverPromise =
+      storeMode() === 'supabase'
+        ? import('./drivers/supabase').then((m) => m.createSupabaseDriver())
+        : import('./drivers/local').then((m) => m.createLocalDriver());
   }
+  return driverPromise;
 }
 
-function writeAll(list: Proof[]): void {
-  ensure();
-  fs.writeFileSync(DB_PATH, JSON.stringify(list, null, 2));
+export async function saveProof(proof: Proof, bytes: Buffer): Promise<void> {
+  return (await driver()).saveProof(proof, bytes);
 }
 
-function mediaPath(p: Pick<Proof, 'code' | 'ext'>): string {
-  return path.join(MEDIA_DIR, `${p.code}.${p.ext}`);
+export async function getProof(code: string): Promise<Proof | null> {
+  return (await driver()).getProof(code);
 }
 
-export function saveProof(proof: Proof, bytes: Buffer): void {
-  ensure();
-  fs.writeFileSync(mediaPath(proof), bytes);
-  const list = readAll();
-  list.push(proof);
-  writeAll(list);
+export async function getMediaBytes(proof: Proof): Promise<Buffer> {
+  return (await driver()).getMediaBytes(proof);
 }
 
-export function getProof(code: string): Proof | null {
-  return readAll().find((p) => p.code === code) ?? null;
-}
-
-export function readMedia(proof: Proof): Buffer {
-  return fs.readFileSync(mediaPath(proof));
-}
-
-/** Đếm số video đã xác thực của một shop (M1: theo tên; M3: theo shopId). */
-export function countByShop(shopName: string): number {
-  return readAll().filter((p) => p.shopName === shopName).length;
+export async function countByShop(shopName: string): Promise<number> {
+  return (await driver()).countByShop(shopName);
 }

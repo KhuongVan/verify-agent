@@ -34,17 +34,39 @@ Không cần cấu hình gì cho M1 — app tự sinh khoá ký Ed25519 và lưu
 - KHÔNG chứng minh: media đến từ camera thật (trần cứng của PWA) hay hàng thật/giả.
 - Định vị đúng: *"bằng chứng quay thật, không cắt ghép"* — giữ chặt disclaimer.
 
-## Các "đường nối" để lên production (M2+)
+## Lưu trữ: hai chế độ (local / Supabase)
 
-| Thành phần | M1 (stand-in) | Production |
+App tự chọn driver theo env (`src/lib/store.ts`):
+
+- **Local** (mặc định, dev): filesystem `.data/`. Zero-config. KHÔNG bền trên serverless.
+- **Supabase** (production): bật khi có đủ `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`.
+  Metadata → Postgres (`public.proofs`); media → Storage bucket `media` (private, phát qua server).
+
+### Bật Supabase (production)
+
+1. Tạo project ở [supabase.com](https://supabase.com).
+2. **SQL Editor** → chạy toàn bộ `supabase/schema.sql` (tạo bảng `proofs` + bucket `media`, bật RLS).
+3. **Project Settings → API**: lấy `Project URL` và `service_role` key.
+4. Sinh khoá ký cố định: `npm run genkey` → dán 3 dòng in ra vào env.
+5. Đặt env (Vercel → Environment Variables, hoặc `.env.local` để test):
+   ```
+   NEXT_PUBLIC_SUPABASE_URL=...
+   SUPABASE_SERVICE_ROLE_KEY=...      # BÍ MẬT
+   SIGNING_KEY_ID=...
+   SIGNING_PRIVATE_KEY_PEM="...\n..." # BÍ MẬT
+   SIGNING_PUBLIC_KEY_PEM="...\n..."
+   ```
+6. Deploy. App tự chuyển sang driver Supabase.
+
+> **Chốt an toàn:** khi đã cấu hình Supabase mà thiếu `SIGNING_*_PEM`, app báo lỗi thay vì tự sinh khoá — tránh việc mỗi cold start ra khoá khác làm mọi chữ ký cũ vỡ.
+
+## Còn lại để hoàn thiện production
+
+| Thành phần | Hiện tại | Bước sau |
 |---|---|---|
-| Lưu metadata | `.data/proofs.json` | Supabase (Postgres) |
-| Lưu media | filesystem `.data/media/` | Mux (video) / R2 (ảnh), signed URL |
-| Khoá ký | tự sinh `.data/signing-key.json` | KMS / secret manager (env `SIGNING_*_PEM`) |
-| Capture | `/upload` (file input) | Camera trong app + chặn thư viện + liveness |
-| Auth/shop | tên shop nhập tay | Supabase Auth + bảng shop |
-
-Chỉ cần giữ nguyên chữ ký các hàm trong `src/lib/store.ts` là thay hạ tầng không phải sửa phần còn lại.
+| Phát video | qua server (same-origin) | Mux (transcode + adaptive) |
+| Auth/shop | tên shop nhập tay | Supabase Auth + bảng shop, uy tín theo shopId |
+| Liveness | chưa có | mã liveness + đối chiếu |
 
 ## Cấu trúc
 

@@ -75,7 +75,14 @@ export async function POST(req: NextRequest) {
     shopName: str('shopName') ?? 'Shop demo',
   };
 
-  saveProof(proof, bytes);
+  try {
+    await saveProof(proof, bytes);
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : 'Lưu bằng chứng thất bại.' },
+      { status: 500 },
+    );
+  }
 
   return NextResponse.json({ code, url: `/v/${code}` }, { status: 201 });
 }

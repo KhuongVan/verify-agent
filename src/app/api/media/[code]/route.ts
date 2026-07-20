@@ -1,17 +1,20 @@
-import { getProof, readMedia } from '@/lib/store';
+import { getMediaBytes, getProof } from '@/lib/store';
 
 export const runtime = 'nodejs';
 
-/** Phát media gốc đã niêm phong. M2/M3 sẽ chuyển sang signed URL của Mux/R2. */
+/**
+ * Phát media gốc đã niêm phong (same-origin, qua server) — nhờ vậy bucket Storage
+ * để PRIVATE. Tối ưu sau (Mux/signed URL) là bước riêng.
+ */
 export async function GET(_req: Request, { params }: { params: { code: string } }) {
-  const proof = getProof(params.code);
+  const proof = await getProof(params.code);
   if (!proof) {
     return new Response('Không tìm thấy media.', { status: 404 });
   }
 
   let bytes: Buffer;
   try {
-    bytes = readMedia(proof);
+    bytes = await getMediaBytes(proof);
   } catch {
     return new Response('Không đọc được media.', { status: 500 });
   }

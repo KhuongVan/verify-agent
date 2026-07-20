@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { canonicalString, sha256Hex, verify, type SealedFacts } from '@/lib/seal';
-import { getProof, readMedia } from '@/lib/store';
+import { getMediaBytes, getProof } from '@/lib/store';
 
 export const runtime = 'nodejs';
 
@@ -10,15 +10,14 @@ export const runtime = 'nodejs';
  * "đừng tin lời người bán, tự kiểm".
  */
 export async function GET(_req: Request, { params }: { params: { code: string } }) {
-  const proof = getProof(params.code);
+  const proof = await getProof(params.code);
   if (!proof) {
     return NextResponse.json({ error: 'Không tìm thấy bằng chứng.' }, { status: 404 });
   }
 
   let hashMatch = false;
-  let recomputed = '';
   try {
-    recomputed = sha256Hex(readMedia(proof));
+    const recomputed = sha256Hex(await getMediaBytes(proof));
     hashMatch = recomputed === proof.sha256;
   } catch {
     hashMatch = false;

@@ -53,6 +53,15 @@ function loadOrCreateKeys(): KeyMaterial {
     return cached;
   }
 
+  // Chốt an toàn: ở production (đã cấu hình Supabase) mà thiếu khoá trong env thì
+  // KHÔNG được tự sinh — vì trên serverless mỗi cold start sẽ ra khoá khác nhau,
+  // làm mọi chữ ký cũ vỡ. Bắt buộc set SIGNING_PRIVATE_KEY_PEM/SIGNING_PUBLIC_KEY_PEM.
+  if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error(
+      'Thiếu khoá ký: hãy đặt SIGNING_PRIVATE_KEY_PEM và SIGNING_PUBLIC_KEY_PEM (chạy `npm run genkey`).',
+    );
+  }
+
   // Dev: sinh khoá Ed25519 mới và lưu lại (đã gitignore).
   const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
   const publicKeyPem = publicKey.export({ type: 'spki', format: 'pem' }).toString();
