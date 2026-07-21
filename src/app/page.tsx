@@ -12,8 +12,11 @@ import { CATEGORIES } from '@/lib/categories';
 
 type Facing = 'environment' | 'user';
 type Mode = 'photo' | 'video';
-type Phase = 'init' | 'live' | 'review' | 'sealing' | 'done';
+type Phase = 'welcome' | 'init' | 'live' | 'review' | 'sealing' | 'done';
 type Shot = { id: string; blob: Blob; url: string; kind: Mode };
+
+/** Đã xem màn chào lần nào chưa — người bán quen dùng vào thẳng camera. */
+const INTRO_KEY = 'at_seen_intro';
 
 function pickMime(): string {
   const cands = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'];
@@ -35,6 +38,9 @@ export default function CameraHome() {
   const [facing, setFacing] = useState<Facing>('environment');
   const [mode, setMode] = useState<Mode>('photo');
   const [phase, setPhase] = useState<Phase>('init');
+  // Chờ đọc localStorage xong mới quyết định hiện màn chào hay camera — tránh
+  // nháy một khung hình "Đang mở camera…" rồi mới nhảy sang màn chào.
+  const [booting, setBooting] = useState(true);
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [shots, setShots] = useState<Shot[]>([]);
@@ -80,7 +86,19 @@ export default function CameraHome() {
   }, [stopStream]);
 
   useEffect(() => {
-    startCamera('environment');
+    // Người mới: KHÔNG mở camera vội. Hỏi quyền trước khi giải thích thì đa số
+    // bấm "Chặn" theo phản xạ, mà đã chặn rồi thì phải vào cài đặt mới bật lại.
+    let seen = false;
+    try {
+      seen = localStorage.getItem(INTRO_KEY) === '1';
+    } catch {
+      seen = false; // trình duyệt chặn storage (chế độ riêng tư) — cứ coi như mới
+    }
+
+    if (seen) startCamera('environment');
+    else setPhase('welcome');
+    setBooting(false);
+
     return () => {
       stopStream();
       if (timerRef.current) clearInterval(timerRef.current);
@@ -88,6 +106,15 @@ export default function CameraHome() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  function beginCapture() {
+    try {
+      localStorage.setItem(INTRO_KEY, '1');
+    } catch {
+      /* không lưu được thì lần sau chào lại — không đáng chặn luồng */
+    }
+    startCamera(facing);
+  }
 
   function addShot(blob: Blob, kind: Mode) {
     const url = URL.createObjectURL(blob);
@@ -245,6 +272,56 @@ export default function CameraHome() {
   }
 
   const mmss = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+
+  // Nền trống trong lúc đọc localStorage — chỉ một khung hình, không chữ nghĩa gì.
+  if (booting) return <div className="cam-shell" />;
+
+  // ---- Màn chào (chỉ hiện lần đầu) ----
+  if (phase === 'welcome') {
+    return (
+      <main className="intro">
+        <div className="intro-card">
+          <div className="intro-brand">
+            <img src="/logo-mark.png" alt="" className="brand-logo lg" />
+            <span>Ảnh Thật</span>
+          </div>
+
+          <h1 className="intro-title">Thấy thật trước khi mua</h1>
+
+          <ol className="intro-steps">
+            <li>
+              <span className="n">1</span>
+              <div>
+                <b>Chụp/quay trực tiếp trong app</b>
+                <span>Không lấy ảnh từ thư viện có sẵn.</span>
+              </div>
+            </li>
+            <li>
+              <span className="n">2</span>
+              <div>
+                <b>Hệ thống xác minh và khoá lại</b>
+                <span>Đóng dấu thời gian, ký số từng ảnh/video.</span>
+              </div>
+            </li>
+            <li>
+              <span className="n">3</span>
+              <div>
+                <b>Gửi link cho khách</b>
+                <span>Khách mở ra tự kiểm được, không cần tin lời bạn.</span>
+              </div>
+            </li>
+          </ol>
+
+          <div className="intro-foot">
+            <button className="btn" style={{ width: '100%' }} onClick={beginCapture}>
+              Bắt đầu chụp
+            </button>
+            <p className="intro-note">Ứng dụng sẽ xin quyền dùng camera ở bước này.</p>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   // ---- Màn hình kết quả ----
   if (phase === 'done' && result) {

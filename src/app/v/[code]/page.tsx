@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { cookies, headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { waitUntil } from '@vercel/functions';
@@ -94,10 +95,11 @@ export default async function VerifyPage({
   return (
     <main className="vp">
       <header className="vp-bar">
-        <div className="vp-brand">
+        {/* Bấm vào là sang màn chụp — người mua xem xong có thể tự dùng Ảnh Thật. */}
+        <Link href="/" className="vp-brand" aria-label="Ảnh Thật — về trang chụp">
           <img src="/logo-mark.png" alt="" className="brand-logo" />
           <span>Ảnh Thật</span>
-        </div>
+        </Link>
         <span className="vp-bar-tag">Thấy thật trước khi mua</span>
       </header>
 
