@@ -94,6 +94,16 @@ export function sha256Hex(buf: Buffer): string {
   return crypto.createHash('sha256').update(buf).digest('hex');
 }
 
+/**
+ * Đưa dấu thời gian về đúng MỘT dạng chữ trước khi ký/kiểm.
+ * Postgres (timestamptz) trả "…625+00:00" trong khi lúc ký là "…625Z" — cùng một
+ * thời điểm nhưng khác byte, đủ để chữ ký vỡ. Chuẩn hoá về ISO-UTC (hậu tố Z).
+ */
+function canonicalTime(iso: string): string {
+  const t = new Date(iso);
+  return Number.isNaN(t.getTime()) ? iso : t.toISOString();
+}
+
 export function canonicalString(f: SealedFacts): string {
   return [
     'nguyenban.v1',
@@ -102,7 +112,7 @@ export function canonicalString(f: SealedFacts): string {
     `sha256=${f.sha256}`,
     `sizeBytes=${f.sizeBytes}`,
     `mimeType=${f.mimeType}`,
-    `sealedAt=${f.sealedAt}`,
+    `sealedAt=${canonicalTime(f.sealedAt)}`,
   ].join('\n');
 }
 
