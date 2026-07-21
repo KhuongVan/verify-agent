@@ -107,6 +107,21 @@ export default function CameraHome() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /**
+   * Gắn luồng camera vào thẻ <video> NGAY SAU khi thẻ đó có mặt trong DOM.
+   *
+   * startCamera() có thể chạy lúc màn chào hoặc màn kết quả đang hiển thị — khi
+   * ấy <video> chưa được render nên liveRef.current còn null, gán trực tiếp sẽ
+   * rơi vào hư không và người dùng chỉ thấy màn đen.
+   */
+  useEffect(() => {
+    const v = liveRef.current;
+    const s = streamRef.current;
+    if (!v || !s || v.srcObject === s) return;
+    v.srcObject = s;
+    v.play().catch(() => {});
+  }, [phase]);
+
   function beginCapture() {
     try {
       localStorage.setItem(INTRO_KEY, '1');
@@ -313,8 +328,13 @@ export default function CameraHome() {
           </ol>
 
           <div className="intro-foot">
+            {error && (
+              <div className="notice err" style={{ marginBottom: 12 }}>
+                {error}
+              </div>
+            )}
             <button className="btn" style={{ width: '100%' }} onClick={beginCapture}>
-              Bắt đầu chụp
+              {error ? 'Thử lại' : 'Bắt đầu chụp'}
             </button>
             <p className="intro-note">Ứng dụng sẽ xin quyền dùng camera ở bước này.</p>
           </div>
