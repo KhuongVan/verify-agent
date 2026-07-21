@@ -43,10 +43,21 @@ export default function SealCheck({ code }: { code: string }) {
   const ok = data?.verdict === 'intact';
 
   return (
-    <div>
-      <button className="seal-check" onClick={toggle} aria-expanded={open}>
-        🔍 {open ? 'Ẩn chi tiết niêm phong' : 'Kiểm tra dấu niêm phong'}
+    <div className="seal-box">
+      <button className="seal-head" onClick={toggle} aria-expanded={open}>
+        <span className="ic" aria-hidden>
+          🔒
+        </span>
+        <b>Kiểm tra dấu niêm phong</b>
+        <span className={`caret${open ? ' up' : ''}`} aria-hidden>
+          ▾
+        </span>
       </button>
+
+      <p className="seal-blurb">
+        Đóng dấu thời gian bởi máy chủ khi nhận — không thể chỉnh sửa. Chỉ 1 byte bị đổi, dấu của
+        mục này sẽ vỡ.
+      </p>
 
       {open && (
         <div className="seal-detail">

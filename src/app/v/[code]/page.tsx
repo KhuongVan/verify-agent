@@ -6,6 +6,7 @@ import { waitUntil } from '@vercel/functions';
 import ConsentBanner from '@/components/ConsentBanner';
 import { getConsent } from '@/lib/consent-server';
 import { resolveFbc, sendMetaEvent } from '@/lib/meta-capi';
+import { verify, type SealedFacts } from '@/lib/seal';
 import { countByShop, getAlbum } from '@/lib/store';
 import { formatVN } from '@/lib/util';
 import Gallery, { type Slide } from './Gallery';
@@ -63,11 +64,26 @@ export default async function VerifyPage({
   }
   // ----------------------------------------------------------------------
 
+  /**
+   * Trạng thái dấu hiển thị ngay khi mở trang: chỉ kiểm CHỮ KÝ (rẻ, không phải
+   * tải media về). Kiểm đầy đủ — băm lại từng file rồi đối chiếu — nằm ở nút
+   * "Kiểm tra dấu niêm phong" bên dưới, vì nó tốn băng thông.
+   */
+  const signaturesOk = album.items.every((i) => {
+    const facts: SealedFacts = {
+      code: album.code,
+      itemId: i.id,
+      sha256: i.sha256,
+      sizeBytes: i.sizeBytes,
+      mimeType: i.mimeType,
+      sealedAt: album.sealedAt,
+    };
+    return verify(facts, i.signatureB64);
+  });
+
   const shopName = album.shopName ?? 'Shop demo';
   const shopCount = await countByShop(shopName);
   const avatar = shopName.trim().charAt(0).toUpperCase() || 'S';
-  const nPhoto = album.items.filter((i) => i.kind === 'photo').length;
-  const nVideo = album.items.filter((i) => i.kind === 'video').length;
 
   const slides: Slide[] = album.items.map((i) => ({
     id: i.id,
@@ -76,76 +92,80 @@ export default async function VerifyPage({
   }));
 
   return (
-    <main className="page">
-      <div className="vp-hero">
-        <img src="/logo-mark.png" alt="Ảnh Thật" className="brand-logo lg" />
-        <h2>Bằng chứng quay thật</h2>
-        <div className="status">Đã xác minh · Không cắt ghép</div>
-      </div>
+    <main className="vp">
+      <header className="vp-bar">
+        <div className="vp-brand">
+          <img src="/logo-mark.png" alt="" className="brand-logo" />
+          <span>Ảnh Thật</span>
+        </div>
+        <span className="vp-bar-tag">Bằng chứng quay thật</span>
+      </header>
 
       <Gallery slides={slides} />
 
-      <section className="block machine">
-        <div className="blk-label">🔒 Nền tảng đảm bảo</div>
-        <div className="fact">
-          <span className="fic">🕒</span>
-          <div>
-            <b>Niêm phong lúc {formatVN(album.sealedAt)}</b>
-            <span>Đóng dấu thời gian bởi máy chủ khi nhận — không thể chỉnh sửa.</span>
-          </div>
-        </div>
-        <div className="fact">
-          <span className="fic">✓</span>
-          <div>
-            <b>
-              {album.items.length} mục, mỗi mục niêm phong riêng bằng chữ ký số
-            </b>
-            <span>
-              {nPhoto > 0 && `${nPhoto} ảnh`}
-              {nPhoto > 0 && nVideo > 0 && ' · '}
-              {nVideo > 0 && `${nVideo} video`}. Chỉ 1 byte bị đổi, dấu của mục đó sẽ vỡ.
-            </span>
-          </div>
-        </div>
-        <div style={{ padding: '0 15px 14px' }}>
-          <SealCheck code={album.code} />
-        </div>
-      </section>
-
-      <div className="shopid">
-        <div className="av">{avatar}</div>
+      <div className={`vp-verdict${signaturesOk ? '' : ' bad'}`}>
+        <span className="vp-verdict-ic" aria-hidden>
+          {signaturesOk ? '✓' : '!'}
+        </span>
         <div>
-          <div className="nm">
-            {shopName} <span className="chk">✓</span>
-          </div>
-          <div className="st">{shopCount} album đã xác thực trên Ảnh Thật</div>
+          <b>{signaturesOk ? 'Đã xác minh · Không cắt ghép' : 'Dấu niêm phong có vấn đề'}</b>
+          <span>
+            {signaturesOk
+              ? 'Quay trực tiếp trong app, không chọn từ thư viện có sẵn.'
+              : 'Chữ ký không khớp. Hãy bấm kiểm tra bên dưới để xem chi tiết.'}
+          </span>
+        </div>
+      </div>
+
+      <div className="vp-facts">
+        <div className="vp-fact">
+          <span className="k">Niêm phong lúc</span>
+          <span className="v">{formatVN(album.sealedAt)}</span>
+        </div>
+        <div className="vp-fact">
+          <span className="k">Mã bằng chứng</span>
+          <span className="v">{album.code}</span>
+        </div>
+        <div className="vp-fact">
+          <span className="k">Trạng thái dấu</span>
+          <span className={`v state${signaturesOk ? '' : ' bad'}`}>
+            {signaturesOk ? 'Nguyên vẹn' : 'Cần kiểm tra'}
+          </span>
+        </div>
+      </div>
+
+      <div className="vp-shop">
+        <span className="av" aria-hidden>
+          {avatar}
+        </span>
+        <div className="who">
+          <b>
+            {shopName}
+            <span className="chk" aria-label="Đã xác thực">
+              ✓
+            </span>
+          </b>
+          <span>{shopCount} album đã xác thực trên Ảnh Thật</span>
         </div>
       </div>
 
       {(album.sellerNote || album.clientLocation) && (
-        <section className="seller">
-          <div className="blk-label">📝 Người bán mô tả</div>
-          <div className="body">
-            {album.sellerNote && <p style={{ margin: '0 0 8px' }}>“{album.sellerNote}”</p>}
-            {album.clientLocation && (
-              <p style={{ margin: 0, color: 'var(--ink-mute)', fontSize: 12 }}>
-                Vị trí tự khai: {album.clientLocation}
-              </p>
-            )}
-          </div>
+        <section className="vp-note">
+          <div className="vp-label">Mô tả từ người bán</div>
+          {album.sellerNote && <p>{album.sellerNote}</p>}
+          {album.clientLocation && <p className="quiet">Vị trí tự khai: {album.clientLocation}</p>}
         </section>
       )}
 
-      <div className="disclaimer">
-        <span className="ic">ⓘ</span>
-        <p>
-          <b>Ảnh Thật xác thực media được quay thật, không cắt ghép.</b> Nền tảng không thẩm định
-          hàng thật/giả — đây là bằng chứng quay trực tiếp, không phải giấy chứng nhận chính hãng.
-        </p>
+      <div className="vp-sealbox">
+        <SealCheck code={album.code} />
       </div>
 
-      <div className="vp-foot">
-        Bảo vệ &amp; xác thực bởi <span className="lg">Ảnh Thật</span> · mã {album.code}
+      <div className="vp-disclaimer">
+        <span className="ic" aria-hidden>
+          ⓘ
+        </span>
+        <p>Đây là bằng chứng quay trực tiếp, không phải giấy chứng nhận hàng thật/giả.</p>
       </div>
 
       {/* Dải hỏi đồng ý — đặt cuối, KHÔNG gate nội dung phía trên. */}

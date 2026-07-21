@@ -40,11 +40,25 @@ export function formatBytes(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/** Định dạng thời gian kiểu VN: HH:MM:SS · DD/MM/YYYY */
+/**
+ * Định dạng thời gian kiểu VN: HH:MM:SS · DD/MM/YYYY
+ *
+ * Ép múi giờ Asia/Ho_Chi_Minh: trang được render ở server (Vercel chạy UTC), nên
+ * dùng giờ máy sẽ hiện lệch 7 tiếng — sai ngay ở dòng "niêm phong lúc", tức là
+ * sai đúng chỗ người mua dựa vào để tin.
+ */
 export function formatVN(iso: string): string {
-  const d = new Date(iso);
-  const p = (x: number) => x.toString().padStart(2, '0');
-  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())} · ${p(d.getDate())}/${p(
-    d.getMonth() + 1,
-  )}/${d.getFullYear()}`;
+  const parts = new Intl.DateTimeFormat('vi-VN', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour12: false,
+  }).formatToParts(new Date(iso));
+
+  const g = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
+  return `${g('hour')}:${g('minute')}:${g('second')} · ${g('day')}/${g('month')}/${g('year')}`;
 }
