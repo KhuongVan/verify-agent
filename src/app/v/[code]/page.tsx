@@ -111,7 +111,7 @@ export default async function VerifyPage({
           <b>{signaturesOk ? 'Đã xác minh · Không cắt ghép' : 'Dấu xác minh có vấn đề'}</b>
           <span>
             {signaturesOk
-              ? 'Quay trực tiếp trong app, không chọn từ thư viện có sẵn.'
+              ? 'Hình ảnh/video được chụp/quay trực tiếp từ app, không chọn từ thư viện có sẵn.'
               : 'Chữ ký không khớp. Hãy bấm kiểm tra bên dưới để xem chi tiết.'}
           </span>
         </div>
