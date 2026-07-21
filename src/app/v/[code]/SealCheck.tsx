@@ -10,7 +10,7 @@ type VerifyResult = {
 };
 
 /**
- * "Kiểm tra dấu niêm phong" — khách tự verify cả album, không cần tin người bán.
+ * "Kiểm tra dấu xác minh" — khách tự verify cả album, không cần tin người bán.
  * Hiển thị kết quả tiếng Việt dễ hiểu; chi tiết kỹ thuật giấu cho người rành.
  */
 export default function SealCheck({ code }: { code: string }) {
@@ -48,7 +48,7 @@ export default function SealCheck({ code }: { code: string }) {
         <span className="ic" aria-hidden>
           🔒
         </span>
-        <b>Kiểm tra dấu niêm phong</b>
+        <b>Kiểm tra dấu xác minh</b>
         <span className={`caret${open ? ' up' : ''}`} aria-hidden>
           ▾
         </span>

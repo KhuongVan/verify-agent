@@ -36,7 +36,7 @@ export default function Gallery({ slides }: { slides: Slide[] }) {
               <video src={s.src} controls playsInline preload="metadata" />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={s.src} alt="Ảnh sản phẩm đã niêm phong" />
+              <img src={s.src} alt="Ảnh sản phẩm đã xác minh" />
             )}
           </div>
         ))}

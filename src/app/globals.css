@@ -814,7 +814,7 @@ h1.title {
   line-height: 1.5;
   color: var(--ink-soft);
 }
-/* Ô tóm tắt số mục đã niêm phong. */
+/* Ô tóm tắt số mục đã xác minh. */
 .done-preview {
   margin: 30px 0 22px;
   height: 190px;
@@ -1238,7 +1238,7 @@ h1.title {
   color: var(--ink-mute);
 }
 
-/* ---- Khối "Kiểm tra dấu niêm phong" ---- */
+/* ---- Khối "Kiểm tra dấu xác minh" ---- */
 .seal-box {
   border: 1px solid var(--line);
   border-radius: 12px;

@@ -44,7 +44,7 @@ export function formatBytes(n: number): string {
  * Định dạng thời gian kiểu VN: HH:MM:SS · DD/MM/YYYY
  *
  * Ép múi giờ Asia/Ho_Chi_Minh: trang được render ở server (Vercel chạy UTC), nên
- * dùng giờ máy sẽ hiện lệch 7 tiếng — sai ngay ở dòng "niêm phong lúc", tức là
+ * dùng giờ máy sẽ hiện lệch 7 tiếng — sai ngay ở dòng "xác minh lúc", tức là
  * sai đúng chỗ người mua dựa vào để tin.
  */
 export function formatVN(iso: string): string {

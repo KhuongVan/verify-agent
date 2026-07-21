@@ -67,7 +67,7 @@ export default async function VerifyPage({
   /**
    * Trạng thái dấu hiển thị ngay khi mở trang: chỉ kiểm CHỮ KÝ (rẻ, không phải
    * tải media về). Kiểm đầy đủ — băm lại từng file rồi đối chiếu — nằm ở nút
-   * "Kiểm tra dấu niêm phong" bên dưới, vì nó tốn băng thông.
+   * "Kiểm tra dấu xác minh" bên dưới, vì nó tốn băng thông.
    */
   const signaturesOk = album.items.every((i) => {
     const facts: SealedFacts = {
@@ -108,7 +108,7 @@ export default async function VerifyPage({
           {signaturesOk ? '✓' : '!'}
         </span>
         <div>
-          <b>{signaturesOk ? 'Đã xác minh · Không cắt ghép' : 'Dấu niêm phong có vấn đề'}</b>
+          <b>{signaturesOk ? 'Đã xác minh · Không cắt ghép' : 'Dấu xác minh có vấn đề'}</b>
           <span>
             {signaturesOk
               ? 'Quay trực tiếp trong app, không chọn từ thư viện có sẵn.'
@@ -119,7 +119,7 @@ export default async function VerifyPage({
 
       <div className="vp-facts">
         <div className="vp-fact">
-          <span className="k">Niêm phong lúc</span>
+          <span className="k">Xác minh lúc</span>
           <span className="v">{formatVN(album.sealedAt)}</span>
         </div>
         <div className="vp-fact">

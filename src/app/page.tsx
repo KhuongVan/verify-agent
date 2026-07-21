@@ -7,7 +7,7 @@ import { CATEGORIES } from '@/lib/categories';
 /**
  * Trang chủ = màn hình chụp kiểu camera điện thoại.
  * Chụp ảnh / quay video trực tiếp (không nhận file thư viện), gom nhiều mục,
- * bấm "Gửi" -> niêm phong cả loạt -> trả về một link để gửi khách.
+ * bấm "Gửi" -> xác minh cả loạt -> trả về một link để gửi khách.
  */
 
 type Facing = 'environment' | 'user';
@@ -412,7 +412,7 @@ export default function CameraHome() {
                 disabled={phase === 'sealing' || shots.length === 0 || !categoryId}
                 title={!categoryId ? 'Hãy chọn ngành hàng trước' : undefined}
               >
-                {phase === 'sealing' ? 'Đang niêm phong…' : `🔒 Tạo link (${shots.length})`}
+                {phase === 'sealing' ? 'Đang xác minh…' : `🔒 Tạo link (${shots.length})`}
               </button>
             </div>
           </div>
