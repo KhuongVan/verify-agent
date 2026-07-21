@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: 'Ảnh Thật',
     short_name: 'Ảnh Thật',
-    description: 'Cam kết hình ảnh nguyên bản — bằng chứng quay thật, không cắt ghép.',
+    description: 'Thấy thật trước khi mua — hình ảnh/video chụp trực tiếp, không cắt ghép.',
     start_url: '/',
     display: 'standalone',
     background_color: '#ffffff',

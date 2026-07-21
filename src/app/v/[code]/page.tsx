@@ -19,7 +19,7 @@ export async function generateMetadata({ params }: { params: { code: string } })
   const album = await getAlbum(params.code);
   if (!album) return { title: 'Không tìm thấy bằng chứng — Ảnh Thật' };
   return {
-    title: `Bằng chứng quay thật · ${album.code} — Ảnh Thật`,
+    title: `Thấy thật trước khi mua · ${album.code} — Ảnh Thật`,
     description: 'Ảnh/video được xác thực quay thật, không cắt ghép.',
   };
 }
@@ -98,7 +98,7 @@ export default async function VerifyPage({
           <img src="/logo-mark.png" alt="" className="brand-logo" />
           <span>Ảnh Thật</span>
         </div>
-        <span className="vp-bar-tag">Bằng chứng quay thật</span>
+        <span className="vp-bar-tag">Thấy thật trước khi mua</span>
       </header>
 
       <Gallery slides={slides} />
@@ -123,7 +123,7 @@ export default async function VerifyPage({
           <span className="v">{formatVN(album.sealedAt)}</span>
         </div>
         <div className="vp-fact">
-          <span className="k">Mã bằng chứng</span>
+          <span className="k">Mã xác minh</span>
           <span className="v">{album.code}</span>
         </div>
         <div className="vp-fact">

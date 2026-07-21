@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 // Bảng chữ Crockford-ish, bỏ ký tự dễ nhầm (0/O, 1/I/L).
 const CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTVWXYZ';
 
-/** Mã bằng chứng công khai trong URL: dạng XXXX-XXXX. */
+/** Mã xác minh công khai trong URL: dạng XXXX-XXXX. */
 export function newCode(): string {
   const bytes = crypto.randomBytes(8);
   let s = '';

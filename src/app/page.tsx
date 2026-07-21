@@ -235,7 +235,7 @@ export default function CameraHome() {
     const full = `${window.location.origin}${result.url}`;
     if (navigator.share) {
       try {
-        await navigator.share({ title: 'Ảnh Thật — bằng chứng quay thật', url: full });
+        await navigator.share({ title: 'Ảnh Thật — Thấy thật trước khi mua', url: full });
         return;
       } catch {
         return; // người dùng bấm huỷ — không làm gì thêm
