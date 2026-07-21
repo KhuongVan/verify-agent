@@ -194,7 +194,8 @@ export default function CameraHome() {
         setResult(json);
         setPhase('done');
         stopStream();
-        shots.forEach((s) => URL.revokeObjectURL(s.url));
+        // Giữ blob URL để màn kết quả xem lại được ảnh vừa gửi — không tải lại
+        // từ server, không tốn thêm băng thông. Dọn ở startNew() và lúc unmount.
       }
     } catch {
       setError('Không kết nối được máy chủ.');
@@ -203,6 +204,7 @@ export default function CameraHome() {
   }
 
   function startNew() {
+    shots.forEach((s) => URL.revokeObjectURL(s.url));
     setShots([]);
     setResult(null);
     setShopName('');
@@ -260,7 +262,28 @@ export default function CameraHome() {
             Gửi link này cho khách để xem hình ảnh/video đã được xác minh thành công
           </p>
 
-          <div className="done-preview">{result.count} media đã xác minh</div>
+          {shots.length > 0 ? (
+            <div className="done-preview">
+              {shots.map((s) => (
+                <div className="dp-item" key={s.id}>
+                  {s.kind === 'photo' ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={s.url} alt="" loading="lazy" decoding="async" />
+                  ) : (
+                    <video src={s.url} muted playsInline preload="metadata" />
+                  )}
+                  {s.kind === 'video' && (
+                    <span className="dp-vid" aria-hidden>
+                      ▶
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="done-preview empty">{result.count} media đã xác minh</div>
+          )}
+          <p className="done-count">{result.count} media đã xác minh</p>
 
           <div className="link-box">
             <span className="link-text">{shown}</span>
