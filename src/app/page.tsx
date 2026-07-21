@@ -224,30 +224,59 @@ export default function CameraHome() {
     }
   }
 
+  /**
+   * Mở bảng chia sẻ của hệ điều hành (Zalo/Messenger...) — đúng việc người bán
+   * cần làm ngay sau khi tạo link. Trình duyệt không hỗ trợ thì lùi về chép link.
+   */
+  async function shareLink() {
+    if (!result) return;
+    const full = `${window.location.origin}${result.url}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'Ảnh Thật — bằng chứng quay thật', url: full });
+        return;
+      } catch {
+        return; // người dùng bấm huỷ — không làm gì thêm
+      }
+    }
+    copyLink();
+  }
+
   const mmss = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 
   // ---- Màn hình kết quả ----
   if (phase === 'done' && result) {
     const full = typeof window !== 'undefined' ? `${window.location.origin}${result.url}` : result.url;
+    // Bỏ "https://" cho dễ đọc — người bán chỉ cần nhận ra link của mình.
+    const shown = full.replace(/^https?:\/\//, '');
     return (
       <main className="done-screen">
         <div className="done-card">
-          <img src="/logo-mark.png" alt="Ảnh Thật" className="brand-logo lg" style={{ display: 'block', margin: '0 auto 14px' }} />
-          <h1 className="title" style={{ textAlign: 'center' }}>Đã niêm phong {result.count} mục</h1>
-          <p className="muted" style={{ textAlign: 'center' }}>
-            Gửi link này cho khách — họ mở ra sẽ lướt xem album đã xác thực.
+          <div className="done-seal" aria-hidden>
+            ✓
+          </div>
+          <h1 className="done-title">Đã xác minh thành công</h1>
+          <p className="done-sub">
+            Gửi link này cho khách để xem hình ảnh/video đã được xác minh thành công
           </p>
+
+          <div className="done-preview">{result.count} media đã xác minh</div>
+
           <div className="link-box">
-            <span className="link-text">{full}</span>
-            <button className="btn" onClick={copyLink}>
-              {copied ? '✓ Đã chép' : 'Chép link'}
+            <span className="link-text">{shown}</span>
+            <button className="btn-copy" onClick={copyLink}>
+              {copied ? '✓ Đã chép' : 'Sao chép'}
             </button>
           </div>
-          <div style={{ display: 'flex', gap: 10, marginTop: 16, justifyContent: 'center' }}>
-            <Link className="btn ghost" href={result.url}>
-              Xem trước
+
+          <div className="done-actions">
+            <button className="btn-share" onClick={shareLink}>
+              Chia sẻ link cho khách
+            </button>
+            <Link className="link-quiet" href={result.url}>
+              Xem trước như khách hàng
             </Link>
-            <button className="btn ghost" onClick={startNew}>
+            <button className="link-quiet" onClick={startNew}>
               + Album mới
             </button>
           </div>
