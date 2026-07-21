@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { Album, Item, ItemBytes, StoreDriver } from '../store';
+import type { Album, ConsentEntry, Item, ItemBytes, StoreDriver } from '../store';
 
 /**
  * Driver Supabase — metadata album ở Postgres (bảng `albums`, cột `items` JSONB),
@@ -16,6 +16,7 @@ type Row = {
   shop_name: string | null;
   seller_note: string | null;
   client_location: string | null;
+  category_id: string | null;
 };
 
 function rowToAlbum(r: Row): Album {
@@ -26,6 +27,8 @@ function rowToAlbum(r: Row): Album {
     shopName: r.shop_name ?? undefined,
     sellerNote: r.seller_note ?? undefined,
     clientLocation: r.client_location ?? undefined,
+    // Album tạo trước khi có taxonomy sẽ là null -> để undefined, nơi dùng tự fallback.
+    categoryId: r.category_id ?? undefined,
   };
 }
 
@@ -64,6 +67,7 @@ export function createSupabaseDriver(): StoreDriver {
         shop_name: album.shopName ?? null,
         seller_note: album.sellerNote ?? null,
         client_location: album.clientLocation ?? null,
+        category_id: album.categoryId ?? null,
       });
       if (ins.error) {
         if (uploaded.length) await supabase.storage.from(BUCKET).remove(uploaded);
@@ -94,6 +98,16 @@ export function createSupabaseDriver(): StoreDriver {
         .eq('shop_name', shopName);
       if (error) throw new Error(`Đếm lỗi: ${error.message}`);
       return count ?? 0;
+    },
+
+    async logConsent(entry: ConsentEntry) {
+      const { error } = await supabase.from('consent_log').insert({
+        at: entry.at,
+        state: entry.state,
+        ip_hash: entry.ipHash ?? null,
+        user_agent: entry.userAgent ?? null,
+      });
+      if (error) throw new Error(`Ghi nhật ký consent lỗi: ${error.message}`);
     },
   };
 }

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { CATEGORIES } from '@/lib/categories';
 
 /**
  * Trang chủ = màn hình chụp kiểu camera điện thoại.
@@ -40,6 +41,7 @@ export default function CameraHome() {
   const [flash, setFlash] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [shopName, setShopName] = useState('');
+  const [categoryId, setCategoryId] = useState('');
   const [note, setNote] = useState('');
   const [result, setResult] = useState<{ code: string; url: string; count: number } | null>(null);
   const [copied, setCopied] = useState(false);
@@ -179,6 +181,7 @@ export default function CameraHome() {
     }
     data.set('capturedAt', new Date().toISOString());
     if (shopName.trim()) data.set('shopName', shopName.trim());
+    if (categoryId) data.set('categoryId', categoryId);
     if (note.trim()) data.set('note', note.trim());
 
     try {
@@ -203,6 +206,7 @@ export default function CameraHome() {
     setShots([]);
     setResult(null);
     setShopName('');
+    setCategoryId('');
     setNote('');
     setCopied(false);
     startCamera(facing);
@@ -349,6 +353,21 @@ export default function CameraHome() {
               <input id="shopName" type="text" value={shopName} onChange={(e) => setShopName(e.target.value)} placeholder="Lux House · Sài Gòn" />
             </div>
             <div className="field">
+              <label htmlFor="categoryId">Ngành hàng</label>
+              <select
+                id="categoryId"
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+              >
+                <option value="">— Chọn ngành hàng —</option>
+                {CATEGORIES.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
               <label htmlFor="note">Mô tả (tuỳ chọn — hiển thị tách bạch)</label>
               <textarea id="note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Chanel Classic Flap Medium, fullset box & card..." />
             </div>
@@ -357,7 +376,13 @@ export default function CameraHome() {
 
             <div style={{ display: 'flex', gap: 10 }}>
               <button className="btn ghost" onClick={() => setPhase('live')}>Chụp thêm</button>
-              <button className="btn" style={{ flex: 1 }} onClick={send} disabled={phase === 'sealing' || shots.length === 0}>
+              <button
+                className="btn"
+                style={{ flex: 1 }}
+                onClick={send}
+                disabled={phase === 'sealing' || shots.length === 0 || !categoryId}
+                title={!categoryId ? 'Hãy chọn ngành hàng trước' : undefined}
+              >
                 {phase === 'sealing' ? 'Đang niêm phong…' : `🔒 Tạo link (${shots.length})`}
               </button>
             </div>

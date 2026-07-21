@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { Album, Item, ItemBytes, StoreDriver } from '../store';
+import type { Album, ConsentEntry, Item, ItemBytes, StoreDriver } from '../store';
 
 /**
  * Driver local — lưu bằng filesystem tại .data/ (dev, zero-config).
@@ -11,6 +11,7 @@ import type { Album, Item, ItemBytes, StoreDriver } from '../store';
 const DATA_DIR = path.join(process.cwd(), '.data');
 const MEDIA_DIR = path.join(DATA_DIR, 'media');
 const DB_PATH = path.join(DATA_DIR, 'albums.json');
+const CONSENT_PATH = path.join(DATA_DIR, 'consent-log.json');
 
 function ensure(): void {
   fs.mkdirSync(MEDIA_DIR, { recursive: true });
@@ -57,6 +58,18 @@ export function createLocalDriver(): StoreDriver {
     },
     async countByShop(shopName) {
       return readAll().filter((a) => a.shopName === shopName).length;
+    },
+    async logConsent(entry: ConsentEntry) {
+      ensure();
+      const path_ = CONSENT_PATH;
+      let list: ConsentEntry[] = [];
+      try {
+        list = JSON.parse(fs.readFileSync(path_, 'utf8')) as ConsentEntry[];
+      } catch {
+        list = [];
+      }
+      list.push(entry);
+      fs.writeFileSync(path_, JSON.stringify(list, null, 2));
     },
   };
 }

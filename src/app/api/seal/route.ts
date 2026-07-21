@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { normalizeCategoryId } from '@/lib/categories';
 import { sha256Hex, sign, type SealedFacts } from '@/lib/seal';
 import { saveAlbum, storeMode, type Album, type Item, type ItemBytes, type MediaKind } from '@/lib/store';
 import { extFromMime, newCode } from '@/lib/util';
@@ -84,6 +85,8 @@ export async function POST(req: NextRequest) {
     shopName: str('shopName') ?? 'Shop demo',
     sellerNote: str('note'),
     clientLocation: str('location'),
+    // Không tin client: giá trị lạ -> 'khac'.
+    categoryId: normalizeCategoryId(str('categoryId')),
   };
 
   try {

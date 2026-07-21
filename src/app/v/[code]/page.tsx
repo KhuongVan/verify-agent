@@ -1,5 +1,11 @@
+import { randomUUID } from 'node:crypto';
 import type { Metadata } from 'next';
+import { cookies, headers } from 'next/headers';
 import { notFound } from 'next/navigation';
+import { waitUntil } from '@vercel/functions';
+import ConsentBanner from '@/components/ConsentBanner';
+import { getConsent } from '@/lib/consent-server';
+import { resolveFbc, sendMetaEvent } from '@/lib/meta-capi';
 import { countByShop, getAlbum } from '@/lib/store';
 import { formatVN } from '@/lib/util';
 import Gallery, { type Slide } from './Gallery';
@@ -17,9 +23,45 @@ export async function generateMetadata({ params }: { params: { code: string } })
   };
 }
 
-export default async function VerifyPage({ params }: { params: { code: string } }) {
+export default async function VerifyPage({
+  params,
+  searchParams,
+}: {
+  params: { code: string };
+  searchParams: { [k: string]: string | string[] | undefined };
+}) {
   const album = await getAlbum(params.code);
   if (!album) notFound();
+
+  // --- Tracking (chỉ khi ĐÃ đồng ý) -------------------------------------
+  // eventId sinh MỘT lần ở server, dùng chung cho cả server lẫn client pixel
+  // để Meta dedup — nếu không, một lượt xem bị đếm hai lần.
+  const consent = await getConsent();
+  const eventId = randomUUID();
+
+  if (consent === 'granted') {
+    const h = headers();
+    const c = cookies();
+    const fbclid = searchParams.fbclid;
+    const host = h.get('host');
+
+    // waitUntil: gửi CAPI sau khi response đã trả, nhưng vẫn giữ hàm sống.
+    // Next 14 chưa có after() của next/server; fetch fire-and-forget trần sẽ bị
+    // serverless đóng băng giữa chừng và mất event.
+    waitUntil(
+      sendMetaEvent({
+        eventId,
+        sourceUrl: `https://${host}/v/${params.code}`,
+        ip: h.get('x-forwarded-for')?.split(',')[0]?.trim(),
+        userAgent: h.get('user-agent') ?? undefined,
+        fbp: c.get('_fbp')?.value,
+        fbc: resolveFbc(c.get('_fbc')?.value, typeof fbclid === 'string' ? fbclid : undefined),
+        category: album.categoryId,
+        contentId: params.code,
+      }),
+    );
+  }
+  // ----------------------------------------------------------------------
 
   const shopName = album.shopName ?? 'Shop demo';
   const shopCount = await countByShop(shopName);
@@ -105,6 +147,14 @@ export default async function VerifyPage({ params }: { params: { code: string } 
       <div className="vp-foot">
         Bảo vệ &amp; xác thực bởi <span className="lg">Ảnh Thật</span> · mã {album.code}
       </div>
+
+      {/* Dải hỏi đồng ý — đặt cuối, KHÔNG gate nội dung phía trên. */}
+      <ConsentBanner
+        initialConsent={consent}
+        eventId={eventId}
+        code={album.code}
+        category={album.categoryId}
+      />
     </main>
   );
 }

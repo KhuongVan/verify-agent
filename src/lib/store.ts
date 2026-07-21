@@ -29,16 +29,30 @@ export type Album = {
   shopName?: string;
   sellerNote?: string;
   clientLocation?: string;
+  /** Ngành hàng (xem lib/categories). Người bán chọn; KHÔNG nằm trong chữ ký. */
+  categoryId?: string;
 };
 
 /** Bytes kèm theo từng mục khi lưu album. */
 export type ItemBytes = { id: string; bytes: Buffer };
+
+/**
+ * Một dòng nhật ký consent — bằng chứng đã xin phép trước khi thu dữ liệu
+ * (Luật 91/2025/QH15). Cố ý KHÔNG lưu IP thô: chỉ hash, đủ để đếm/đối soát.
+ */
+export type ConsentEntry = {
+  at: string; // ISO
+  state: 'granted' | 'denied';
+  ipHash?: string;
+  userAgent?: string;
+};
 
 export interface StoreDriver {
   saveAlbum(album: Album, files: ItemBytes[]): Promise<void>;
   getAlbum(code: string): Promise<Album | null>;
   getItemBytes(code: string, item: Item): Promise<Buffer>;
   countByShop(shopName: string): Promise<number>;
+  logConsent(entry: ConsentEntry): Promise<void>;
 }
 
 export function storeMode(): 'supabase' | 'local' {
@@ -73,4 +87,8 @@ export async function getItemBytes(code: string, item: Item): Promise<Buffer> {
 
 export async function countByShop(shopName: string): Promise<number> {
   return (await driver()).countByShop(shopName);
+}
+
+export async function logConsent(entry: ConsentEntry): Promise<void> {
+  return (await driver()).logConsent(entry);
 }
