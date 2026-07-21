@@ -37,10 +37,12 @@ function loadOrCreateKeys(): KeyMaterial {
   const envPriv = process.env.SIGNING_PRIVATE_KEY_PEM;
   const envPub = process.env.SIGNING_PUBLIC_KEY_PEM;
   if (envPriv && envPub) {
+    const privateKeyPem = normalizePem(envPriv, 'PRIVATE KEY');
+    const publicKeyPem = normalizePem(envPub, 'PUBLIC KEY');
     cached = {
-      privateKeyPem: envPriv.replace(/\\n/g, '\n'),
-      publicKeyPem: envPub.replace(/\\n/g, '\n'),
-      keyId: process.env.SIGNING_KEY_ID || fingerprint(envPub),
+      privateKeyPem,
+      publicKeyPem,
+      keyId: process.env.SIGNING_KEY_ID || fingerprint(publicKeyPem),
     };
     return cached;
   }
@@ -67,6 +69,21 @@ function loadOrCreateKeys(): KeyMaterial {
   fs.writeFileSync(KEY_PATH, JSON.stringify(km, null, 2), { mode: 0o600 });
   cached = km;
   return km;
+}
+
+/**
+ * Chuẩn hoá khoá lấy từ env về PEM hợp lệ.
+ * Dán khoá vào dashboard (Vercel) rất dễ rụng header/footer hoặc xuống dòng —
+ * khi đó OpenSSL không decode được và crypto.sign() văng. Ở đây ta khôi phục
+ * khung PEM nếu chỉ còn phần base64 thân khoá.
+ */
+function normalizePem(raw: string, label: 'PRIVATE KEY' | 'PUBLIC KEY'): string {
+  const s = raw.replace(/\\n/g, '\n').trim();
+  if (s.includes('-----BEGIN')) return s.endsWith('\n') ? s : `${s}\n`;
+
+  const body = s.replace(/\s+/g, '');
+  const lines = body.match(/.{1,64}/g) ?? [];
+  return `-----BEGIN ${label}-----\n${lines.join('\n')}\n-----END ${label}-----\n`;
 }
 
 function fingerprint(pubPem: string): string {
