@@ -425,8 +425,8 @@ export default function CameraHome() {
 
           <h1 className="intro-title">Hãy mở bằng trình duyệt</h1>
           <p className="intro-lead">
-            Bạn đang mở trong {appLabel}. Trình duyệt của {appLabel} chặn camera, nên sẽ không quay
-            được — màn hình chỉ hiện màu đen.
+            Bạn đang mở trong {appLabel}. Để có trải nghiệm tốt nhất hãy mở bằng trình duyệt bạn
+            nhé!
           </p>
 
           {inApp.os === 'ios' ? (
@@ -452,7 +452,7 @@ export default function CameraHome() {
                 <span className="n">1</span>
                 <div>
                   <b>Bấm nút bên dưới để mở trình duyệt</b>
-                  <span>Không mở được thì bấm ⋮ ở góc rồi chọn “Mở bằng trình duyệt”.</span>
+                  <span>Nếu không mở được thì bấm ⋮ ở góc rồi chọn “Mở bằng trình duyệt”.</span>
                 </div>
               </li>
             </ol>
