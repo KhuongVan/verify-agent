@@ -41,6 +41,8 @@ export default function CameraHome() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const shotsRef = useRef<Shot[]>([]);
   const idRef = useRef(0);
+  /** Đã tự mở bảng chia sẻ cho link này chưa — chỉ làm đúng một lần. */
+  const autoSharedRef = useRef(false);
 
   const [facing, setFacing] = useState<Facing>('environment');
   const [mode, setMode] = useState<Mode>('photo');
@@ -56,6 +58,8 @@ export default function CameraHome() {
   const [shopName, setShopName] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [note, setNote] = useState('');
+  /** Mục đang xem lớn ở trang "Xem lại". */
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const [result, setResult] = useState<{ code: string; url: string; count: number } | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -211,11 +215,19 @@ export default function CameraHome() {
   }
 
   function removeShot(id: string) {
-    setShots((prev) => {
-      const s = prev.find((x) => x.id === id);
-      if (s) URL.revokeObjectURL(s.url);
-      return prev.filter((x) => x.id !== id);
-    });
+    const idx = shots.findIndex((x) => x.id === id);
+    if (idx < 0) return;
+    URL.revokeObjectURL(shots[idx].url);
+    const rest = shots.filter((x) => x.id !== id);
+    setShots(rest);
+
+    // Xoá hết thì quay lại camera; xoá đúng mục đang xem thì nhảy sang mục kế.
+    if (rest.length === 0) {
+      setPreviewId(null);
+      setPhase('live');
+      return;
+    }
+    if (previewId === id) setPreviewId(rest[Math.min(idx, rest.length - 1)].id);
   }
 
   async function send() {
@@ -243,6 +255,8 @@ export default function CameraHome() {
         setResult(json);
         setPhase('done');
         stopStream();
+        // Gọi ngay tại đây để còn giữ được quyền mở bảng chia sẻ (xem autoShare).
+        void autoShare(`${window.location.origin}${json.url}`);
         // Giữ blob URL để màn kết quả xem lại được ảnh vừa gửi — không tải lại
         // từ server, không tốn thêm băng thông. Dọn ở startNew() và lúc unmount.
       }
@@ -253,6 +267,7 @@ export default function CameraHome() {
   }
 
   function startNew() {
+    autoSharedRef.current = false;
     shots.forEach((s) => URL.revokeObjectURL(s.url));
     setShots([]);
     setResult(null);
@@ -291,6 +306,39 @@ export default function CameraHome() {
       }
     }
     copyLink();
+  }
+
+  /**
+   * Tự mở bảng chia sẻ ngay khi tạo link xong, để người bán bớt một thao tác.
+   *
+   * Phải gọi TRONG send(), không phải trong useEffect: navigator.share() đòi
+   * "transient user activation" — quyền có được từ cú bấm "Tạo link" và mất dần
+   * theo thời gian. Gọi sau khi React vẽ lại thì gần như chắc chắn bị chặn.
+   *
+   * Bị chặn (thường gặp trên iOS, hoặc khi upload lâu) -> chép link vào clipboard
+   * để vẫn tiết kiệm được một thao tác. Người dùng CHỦ ĐỘNG đóng bảng chia sẻ thì
+   * không chép — đó là họ đã từ chối, không phải thất bại kỹ thuật.
+   */
+  async function autoShare(full: string) {
+    if (autoSharedRef.current) return;
+    autoSharedRef.current = true;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'Ảnh Thật — Thấy thật trước khi mua', url: full });
+        return;
+      } catch (e) {
+        if ((e as DOMException)?.name === 'AbortError') return;
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(full);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 3000);
+    } catch {
+      /* clipboard cũng bị chặn — người dùng vẫn có nút chia sẻ trên màn hình */
+    }
   }
 
   const mmss = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
@@ -350,6 +398,126 @@ export default function CameraHome() {
     );
   }
 
+  // ---- Trang xem lại trước khi gửi ----
+  if (phase === 'review' || phase === 'sealing') {
+    const current = shots.find((s) => s.id === previewId) ?? shots[0];
+    const sealing = phase === 'sealing';
+
+    return (
+      <main className="review">
+        <header className="rv-bar">
+          <button
+            className="rv-back"
+            onClick={() => setPhase('live')}
+            disabled={sealing}
+            aria-label="Quay lại chụp"
+          >
+            ←
+          </button>
+          <h1>Xem lại {shots.length} mục</h1>
+          <button className="rv-add" onClick={() => setPhase('live')} disabled={sealing}>
+            + Chụp thêm
+          </button>
+        </header>
+
+        {/* Khung xem lớn — bấm thumbnail bên dưới để đổi mục. */}
+        <div className="rv-stage">
+          {current &&
+            (current.kind === 'photo' ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={current.url} alt="Mục vừa chụp" />
+            ) : (
+              <video src={current.url} controls playsInline preload="metadata" />
+            ))}
+          {current && !sealing && (
+            <button className="rv-del" onClick={() => removeShot(current.id)}>
+              Xoá mục này
+            </button>
+          )}
+        </div>
+
+        {shots.length > 1 && (
+          <div className="rv-strip">
+            {shots.map((s) => (
+              <button
+                key={s.id}
+                className={`rv-thumb${s.id === current?.id ? ' on' : ''}`}
+                onClick={() => setPreviewId(s.id)}
+                aria-label={`Xem mục ${s.kind === 'photo' ? 'ảnh' : 'video'}`}
+              >
+                {s.kind === 'photo' ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={s.url} alt="" />
+                ) : (
+                  <video src={s.url} muted playsInline />
+                )}
+                {s.kind === 'video' && (
+                  <span className="v" aria-hidden>
+                    ▶
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="rv-form">
+          <div className="field">
+            <label htmlFor="categoryId">Ngành hàng</label>
+            <select
+              id="categoryId"
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
+            >
+              <option value="">— Chọn ngành hàng —</option>
+              {CATEGORIES.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="shopName">Tên shop (tuỳ chọn)</label>
+            <input
+              id="shopName"
+              type="text"
+              value={shopName}
+              onChange={(e) => setShopName(e.target.value)}
+              placeholder="Lux House · Sài Gòn"
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="note">Mô tả (tuỳ chọn — hiển thị tách bạch)</label>
+            <textarea
+              id="note"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Chanel Classic Flap Medium, fullset box & card..."
+            />
+          </div>
+        </div>
+
+        <div className="rv-foot">
+          {error && (
+            <div className="notice err" style={{ marginBottom: 12 }}>
+              {error}
+            </div>
+          )}
+          <button
+            className="btn"
+            style={{ width: '100%' }}
+            onClick={send}
+            disabled={sealing || shots.length === 0 || !categoryId}
+            title={!categoryId ? 'Hãy chọn ngành hàng trước' : undefined}
+          >
+            {sealing ? 'Đang xác minh…' : `🔒 Tạo link (${shots.length})`}
+          </button>
+        </div>
+      </main>
+    );
+  }
+
   // ---- Màn hình kết quả ----
   if (phase === 'done' && result) {
     const full = typeof window !== 'undefined' ? `${window.location.origin}${result.url}` : result.url;
@@ -392,11 +560,12 @@ export default function CameraHome() {
           <div className="link-box">
             <span className="link-text">{shown}</span>
             <button className="btn-copy" onClick={copyLink}>
-              {copied ? '✓ Đã chép' : 'Sao chép'}
+              {copied ? '✓ Đã sao chép' : 'Sao chép'}
             </button>
           </div>
 
           <div className="done-actions">
+            {copied && <p className="done-copied">✓ Đã sao chép link</p>}
             <button className="btn-share" onClick={shareLink}>
               Chia sẻ link cho khách
             </button>
@@ -445,7 +614,12 @@ export default function CameraHome() {
           {/* Tray */}
           <button
             className="tray"
-            onClick={() => shots.length && setPhase('review')}
+            onClick={() => {
+              if (!shots.length) return;
+              // Tray đang hiện mục mới nhất — bấm vào thì mở đúng mục đó.
+              setPreviewId(shots[shots.length - 1].id);
+              setPhase('review');
+            }}
             aria-label="Xem các mục đã chụp"
             disabled={shots.length === 0}
           >
@@ -483,68 +657,6 @@ export default function CameraHome() {
         </div>
       </div>
 
-      {/* Review sheet */}
-      {(phase === 'review' || phase === 'sealing') && (
-        <div className="sheet-backdrop" onClick={() => phase === 'review' && setPhase('live')}>
-          <div className="sheet" onClick={(e) => e.stopPropagation()}>
-            <div className="sheet-handle" />
-            <h2 className="sheet-title">Xem lại {shots.length} mục</h2>
-            <div className="thumb-grid">
-              {shots.map((s) => (
-                <div className="thumb" key={s.id}>
-                  {s.kind === 'photo' ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={s.url} alt="" />
-                  ) : (
-                    <video src={s.url} muted playsInline />
-                  )}
-                  <button className="thumb-x" onClick={() => removeShot(s.id)} aria-label="Xoá">×</button>
-                  {s.kind === 'video' && <span className="thumb-vid">▶</span>}
-                </div>
-              ))}
-            </div>
-
-            <div className="field">
-              <label htmlFor="shopName">Tên shop (tuỳ chọn)</label>
-              <input id="shopName" type="text" value={shopName} onChange={(e) => setShopName(e.target.value)} placeholder="Lux House · Sài Gòn" />
-            </div>
-            <div className="field">
-              <label htmlFor="categoryId">Ngành hàng</label>
-              <select
-                id="categoryId"
-                value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value)}
-              >
-                <option value="">— Chọn ngành hàng —</option>
-                {CATEGORIES.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="field">
-              <label htmlFor="note">Mô tả (tuỳ chọn — hiển thị tách bạch)</label>
-              <textarea id="note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Chanel Classic Flap Medium, fullset box & card..." />
-            </div>
-
-            {error && <div className="notice err" style={{ marginBottom: 12 }}>{error}</div>}
-
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button className="btn ghost" onClick={() => setPhase('live')}>Chụp thêm</button>
-              <button
-                className="btn"
-                style={{ flex: 1 }}
-                onClick={send}
-                disabled={phase === 'sealing' || shots.length === 0 || !categoryId}
-                title={!categoryId ? 'Hãy chọn ngành hàng trước' : undefined}
-              >
-                {phase === 'sealing' ? 'Đang xác minh…' : `🔒 Tạo link (${shots.length})`}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
