@@ -1,7 +1,14 @@
 'use client';
 
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
+
 import Link from 'next/link';
-import { useCallback, useEffect, useRef, useState } from 'react';
+
 import { CATEGORIES } from '@/lib/categories';
 
 /**
@@ -322,7 +329,7 @@ export default function CameraHome() {
               <span className="n">3</span>
               <div>
                 <b>Gửi link cho khách</b>
-                <span>Khách mở ra tự kiểm được, không cần tin lời bạn.</span>
+                <span>Khách mở ra tự kiểm được.</span>
               </div>
             </li>
           </ol>

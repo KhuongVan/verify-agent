@@ -84,7 +84,7 @@ export default function SealCheck({ code }: { code: string }) {
                 </div>
               )}
               <p style={{ margin: '10px 0 0', fontSize: 11 }}>
-                Bạn không cần tin lời người bán — hệ thống tự băm lại từng ảnh/video và đối chiếu với
+                Hệ thống tự băm lại từng ảnh/video và đối chiếu với
                 chữ ký gốc lưu tại Ảnh Thật.
               </p>
               <p style={{ margin: '6px 0 0', fontSize: 10.5, color: 'var(--ink-mute)' }}>
