@@ -10,6 +10,7 @@ import {
 import Link from 'next/link';
 
 import { CATEGORIES } from '@/lib/categories';
+import { androidBrowserIntent, detectInApp, iosSafariUrl, type InAppInfo } from '@/lib/inapp';
 
 /**
  * Trang chủ = màn hình chụp kiểu camera điện thoại.
@@ -19,7 +20,7 @@ import { CATEGORIES } from '@/lib/categories';
 
 type Facing = 'environment' | 'user';
 type Mode = 'photo' | 'video';
-type Phase = 'welcome' | 'init' | 'live' | 'review' | 'sealing' | 'done';
+type Phase = 'welcome' | 'inapp' | 'init' | 'live' | 'review' | 'sealing' | 'done';
 type Shot = { id: string; blob: Blob; url: string; kind: Mode };
 
 /** Đã xem màn chào lần nào chưa — người bán quen dùng vào thẳng camera. */
@@ -43,6 +44,8 @@ export default function CameraHome() {
   const idRef = useRef(0);
   /** Đã tự mở bảng chia sẻ cho link này chưa — chỉ làm đúng một lần. */
   const autoSharedRef = useRef(false);
+  /** Đã xem màn chào chưa (đọc từ localStorage lúc khởi động). */
+  const seenIntroRef = useRef(false);
 
   const [facing, setFacing] = useState<Facing>('environment');
   const [mode, setMode] = useState<Mode>('photo');
@@ -50,6 +53,9 @@ export default function CameraHome() {
   // Chờ đọc localStorage xong mới quyết định hiện màn chào hay camera — tránh
   // nháy một khung hình "Đang mở camera…" rồi mới nhảy sang màn chào.
   const [booting, setBooting] = useState(true);
+  const [inApp, setInApp] = useState<InAppInfo | null>(null);
+  /** Camera "mở được" nhưng không ra hình — màn đen trong webview. */
+  const [stalled, setStalled] = useState(false);
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [shots, setShots] = useState<Shot[]>([]);
@@ -106,7 +112,14 @@ export default function CameraHome() {
       seen = false; // trình duyệt chặn storage (chế độ riêng tư) — cứ coi như mới
     }
 
-    if (seen) startCamera('environment');
+    // Webview của app nhắn tin chặn camera -> cảnh báo TRƯỚC, đừng để họ cấp
+    // quyền xong mới thấy màn đen rồi tưởng app hỏng.
+    seenIntroRef.current = seen;
+    const info = detectInApp(navigator.userAgent);
+    setInApp(info);
+
+    if (info.isInApp) setPhase('inapp');
+    else if (seen) startCamera('environment');
     else setPhase('welcome');
     setBooting(false);
 
@@ -129,9 +142,62 @@ export default function CameraHome() {
     const v = liveRef.current;
     const s = streamRef.current;
     if (!v || !s || v.srcObject === s) return;
+
     v.srcObject = s;
+    setStalled(false);
     v.play().catch(() => {});
+
+    /**
+     * Bẫy "màn đen câm": webview của app nhắn tin có thể trả về stream hợp lệ
+     * nhưng không bao giờ đẩy khung hình nào — getUserMedia KHÔNG báo lỗi, nên
+     * đây là cách duy nhất để biết. videoWidth vẫn bằng 0 nghĩa là chưa có hình.
+     */
+    const onPlaying = () => {
+      if (v.videoWidth > 0) setStalled(false);
+    };
+    v.addEventListener('playing', onPlaying);
+    const t = setTimeout(() => setStalled(v.videoWidth === 0), 3500);
+
+    return () => {
+      clearTimeout(t);
+      v.removeEventListener('playing', onPlaying);
+    };
   }, [phase]);
+
+  /**
+   * Mở trang hiện tại bằng trình duyệt thật.
+   *
+   * Android: intent:// — cách chính thức, chạy ổn định.
+   * iOS: thử scheme không chính thức x-safari-https:// (xem lib/inapp). Nếu sau
+   * ~1,2s trang vẫn còn hiển thị nghĩa là không ăn -> đưa về hướng dẫn thao tác
+   * tay. Không thể biết trước có được hay không, nên cứ thử rồi kiểm chứng.
+   */
+  function openInBrowser() {
+    const here = window.location.href;
+
+    if (inApp?.os === 'android') {
+      window.location.href = androidBrowserIntent(here);
+      return;
+    }
+
+    if (inApp?.os === 'ios') {
+      let left = false;
+      const onHide = () => {
+        left = true; // trang bị ẩn đi -> Safari đã mở
+      };
+      document.addEventListener('visibilitychange', onHide, { once: true });
+
+      window.location.href = iosSafariUrl(here);
+
+      setTimeout(() => {
+        document.removeEventListener('visibilitychange', onHide);
+        if (!left && document.visibilityState === 'visible') setPhase('inapp');
+      }, 1200);
+      return;
+    }
+
+    setPhase('inapp');
+  }
 
   function beginCapture() {
     try {
@@ -345,6 +411,97 @@ export default function CameraHome() {
 
   // Nền trống trong lúc đọc localStorage — chỉ một khung hình, không chữ nghĩa gì.
   if (booting) return <div className="cam-shell" />;
+
+  // ---- Đang mở trong app nhắn tin: camera sẽ không chạy ----
+  if (phase === 'inapp' && inApp) {
+    const appLabel = inApp.appName ?? 'ứng dụng này';
+    return (
+      <main className="intro">
+        <div className="intro-card">
+          <div className="intro-brand">
+            <img src="/logo-mark.png" alt="" className="brand-logo lg" />
+            <span>Ảnh Thật</span>
+          </div>
+
+          <h1 className="intro-title">Hãy mở bằng trình duyệt</h1>
+          <p className="intro-lead">
+            Bạn đang mở trong {appLabel}. Trình duyệt của {appLabel} chặn camera, nên sẽ không quay
+            được — màn hình chỉ hiện màu đen.
+          </p>
+
+          {inApp.os === 'ios' ? (
+            <ol className="intro-steps" style={{ marginTop: 26 }}>
+              <li>
+                <span className="n">1</span>
+                <div>
+                  <b>Bấm nút ⋯ hoặc ⇱ ở góc màn hình</b>
+                  <span>Thường nằm ở góc trên bên phải, hoặc thanh dưới cùng.</span>
+                </div>
+              </li>
+              <li>
+                <span className="n">2</span>
+                <div>
+                  <b>Chọn “Mở trong Safari” hoặc “Mở bằng trình duyệt”</b>
+                  <span>Sau đó chụp/quay như bình thường.</span>
+                </div>
+              </li>
+            </ol>
+          ) : (
+            <ol className="intro-steps" style={{ marginTop: 26 }}>
+              <li>
+                <span className="n">1</span>
+                <div>
+                  <b>Bấm nút bên dưới để mở trình duyệt</b>
+                  <span>Không mở được thì bấm ⋮ ở góc rồi chọn “Mở bằng trình duyệt”.</span>
+                </div>
+              </li>
+            </ol>
+          )}
+
+          <div className="intro-foot">
+            {copied && <p className="done-copied">✓ Đã sao chép link</p>}
+
+            {inApp.os === 'android' ? (
+              <button className="btn" style={{ width: '100%' }} onClick={openInBrowser}>
+                Mở bằng trình duyệt
+              </button>
+            ) : (
+              <>
+                <button className="btn" style={{ width: '100%' }} onClick={openInBrowser}>
+                  Mở bằng trình duyệt
+                </button>
+                <button
+                  className="btn ghost"
+                  style={{ width: '100%', marginTop: 10 }}
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(window.location.href);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 3000);
+                    } catch {
+                      /* clipboard bị chặn — vẫn còn 2 bước hướng dẫn ở trên */
+                    }
+                  }}
+                >
+                  Sao chép link
+                </button>
+              </>
+            )}
+
+            <button
+              className="intro-skip"
+              onClick={() => {
+                setPhase(seenIntroRef.current ? 'init' : 'welcome');
+                if (seenIntroRef.current) startCamera('environment');
+              }}
+            >
+              Vẫn tiếp tục ở đây
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   // ---- Màn chào (chỉ hiện lần đầu) ----
   if (phase === 'welcome') {
@@ -600,6 +757,28 @@ export default function CameraHome() {
       {error && <div className="cam-error">{error} <button onClick={() => startCamera(facing)}>Thử lại</button></div>}
 
       {phase === 'init' && !error && <div className="cam-hint">Đang mở camera…</div>}
+
+      {/* Camera mở được nhưng không ra hình — thường do webview app nhắn tin. */}
+      {stalled && !error && (
+        <div className="cam-stall">
+          <b>Không nhận được hình từ camera</b>
+          <p>
+            {inApp?.isInApp
+              ? `Trình duyệt của ${inApp.appName ?? 'ứng dụng này'} đang chặn camera. Hãy mở bằng trình duyệt để chụp được.`
+              : 'Có thể một ứng dụng khác đang dùng camera. Hãy đóng ứng dụng đó rồi thử lại.'}
+          </p>
+          <div className="cam-stall-acts">
+            {inApp?.isInApp && (
+              <button className="btn" onClick={openInBrowser}>
+                Mở bằng trình duyệt
+              </button>
+            )}
+            <button className="btn ghost" onClick={() => startCamera(facing)}>
+              Thử lại
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Bottom controls */}
       <div className="cam-bottom">

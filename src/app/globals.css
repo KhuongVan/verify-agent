@@ -1547,3 +1547,62 @@ h1.title {
   font-weight: 600;
   color: var(--verify);
 }
+.intro-lead {
+  margin: 0;
+  text-align: center;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+  text-wrap: pretty;
+}
+.intro-skip {
+  all: unset;
+  cursor: pointer;
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+  text-align: center;
+  font-size: 14.5px;
+  color: var(--ink-mute);
+}
+.intro-skip:hover {
+  color: var(--ink-soft);
+}
+
+/* Cảnh báo camera không ra hình (màn đen trong webview) */
+.cam-stall {
+  position: absolute;
+  z-index: 30;
+  left: 18px;
+  right: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 20px 18px;
+  border-radius: 16px;
+  background: rgba(20, 18, 15, 0.86);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  text-align: center;
+}
+.cam-stall b {
+  display: block;
+  font-size: 16.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin-bottom: 6px;
+}
+.cam-stall p {
+  margin: 0 0 16px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.8);
+}
+.cam-stall-acts {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.cam-stall-acts .btn.ghost {
+  color: rgba(255, 255, 255, 0.85);
+  border-color: rgba(255, 255, 255, 0.35);
+}
