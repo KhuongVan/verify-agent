@@ -159,7 +159,8 @@ h1.title {
 .field select,
 .field textarea {
   font-family: var(--font-ui);
-  font-size: 14px;
+  /* 16px: dưới ngưỡng này iOS Safari tự phóng to trang khi bấm vào ô nhập. */
+  font-size: 16px;
   color: var(--ink);
   background: var(--card);
   border: 1px solid var(--line);
@@ -239,7 +240,7 @@ h1.title {
   position: relative;
   width: 100%;
   aspect-ratio: 3 / 4;
-  max-height: 60vh;
+  max-height: 60dvh;
   background: #000;
   border-radius: 14px;
   overflow: hidden;
@@ -695,7 +696,7 @@ h1.title {
 
 /* ---- done screen ---- */
 .done-screen {
-  min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   place-items: center;
   padding: 20px 16px;
@@ -704,7 +705,7 @@ h1.title {
 .done-card {
   max-width: 430px;
   width: 100%;
-  min-height: min(760px, calc(100vh - 40px));
+  min-height: calc(100dvh - 40px);
   display: flex;
   flex-direction: column;
   padding: 34px 26px 26px;
@@ -883,7 +884,7 @@ h1.title {
   flex: 0 0 100%;
   scroll-snap-align: center;
   aspect-ratio: 3 / 4;
-  max-height: 66vh;
+  max-height: 66dvh;
   display: grid;
   place-items: center;
   background: #000;
@@ -1048,7 +1049,7 @@ h1.title {
 .vp {
   max-width: 560px;
   margin: 0 auto;
-  min-height: 100vh;
+  min-height: 100dvh;
   background: var(--card);
 }
 .vp-bar {
@@ -1308,7 +1309,7 @@ h1.title {
 
 /* ---- Màn chào (lần đầu vào app) ---- */
 .intro {
-  min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   place-items: center;
   padding: 20px 16px;
@@ -1317,7 +1318,7 @@ h1.title {
 .intro-card {
   width: 100%;
   max-width: 430px;
-  min-height: min(720px, calc(100vh - 40px));
+  min-height: calc(100dvh - 40px);
   display: flex;
   flex-direction: column;
   padding: 34px 26px 26px;
@@ -1399,7 +1400,7 @@ h1.title {
 
 /* ---- Trang "Xem lại" (trước khi tạo link) ---- */
 .review {
-  min-height: 100vh;
+  min-height: 100dvh;
   max-width: 560px;
   margin: 0 auto;
   display: flex;
@@ -1459,14 +1460,14 @@ h1.title {
   background: #000;
   display: grid;
   place-items: center;
-  min-height: 46vh;
-  max-height: 60vh;
+  min-height: 46dvh;
+  max-height: 60dvh;
   overflow: hidden;
 }
 .rv-stage img,
 .rv-stage video {
   width: 100%;
-  max-height: 60vh;
+  max-height: 60dvh;
   object-fit: contain;
   display: block;
   background: #000;
