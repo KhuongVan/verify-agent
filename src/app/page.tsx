@@ -26,6 +26,20 @@ type Shot = { id: string; blob: Blob; url: string; kind: Mode };
 /** Đã xem màn chào lần nào chưa — người bán quen dùng vào thẳng camera. */
 const INTRO_KEY = 'at_seen_intro';
 
+/**
+ * Quyền camera có đang bị CHẶN không (state 'denied' của Permissions API).
+ * Chặn ≠ từ chối tạm: khi bị chặn, getUserMedia không hiện popup nữa.
+ * Safari iOS không hỗ trợ query 'camera' -> trả false (để không chặn nhầm).
+ */
+async function isCameraBlocked(): Promise<boolean> {
+  try {
+    const status = await navigator.permissions.query({ name: 'camera' as PermissionName });
+    return status.state === 'denied';
+  } catch {
+    return false;
+  }
+}
+
 function pickMime(): string {
   const cands = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'];
   for (const c of cands) {
@@ -58,6 +72,8 @@ export default function CameraHome() {
   const [inApp, setInApp] = useState<InAppInfo | null>(null);
   /** Camera "mở được" nhưng không ra hình — màn đen trong webview. */
   const [stalled, setStalled] = useState(false);
+  /** Quyền camera đã bị CHẶN (không phải từ chối tạm) — phải mở lại trong cài đặt. */
+  const [permBlocked, setPermBlocked] = useState(false);
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [shots, setShots] = useState<Shot[]>([]);
@@ -86,6 +102,7 @@ export default function CameraHome() {
 
   const startCamera = useCallback(async (want: Facing) => {
     setError(null);
+    setPermBlocked(false);
     if (!navigator.mediaDevices?.getUserMedia) {
       setError('Trình duyệt không hỗ trợ camera, hoặc trang không chạy trên HTTPS/localhost.');
       return;
@@ -104,9 +121,23 @@ export default function CameraHome() {
       setPhase('live');
     } catch (e) {
       const name = (e as DOMException)?.name;
-      if (name === 'NotAllowedError') setError('Bạn đã từ chối quyền camera. Hãy cho phép rồi thử lại.');
-      else if (name === 'NotFoundError') setError('Không tìm thấy camera trên thiết bị.');
-      else setError('Không mở được camera. Kiểm tra quyền truy cập và thử lại.');
+      if (name === 'NotAllowedError') {
+        // Phân biệt "đã CHẶN vĩnh viễn" với "từ chối tạm lần này": nếu đã chặn thì
+        // gọi lại getUserMedia cũng vô ích (không hiện popup), phải vào cài đặt.
+        const blocked = await isCameraBlocked();
+        if (blocked) {
+          setPermBlocked(true);
+          setPhase('init'); // vào camera shell để overlay hướng dẫn hiện (kể cả khi bấm từ màn chào)
+        } else {
+          setError('Bạn chưa cho phép dùng camera. Bấm "Thử lại" và chọn Cho phép.');
+        }
+      } else if (name === 'NotFoundError') {
+        setError('Không tìm thấy camera trên thiết bị.');
+      } else if (name === 'NotReadableError') {
+        setError('Camera đang bị ứng dụng khác chiếm. Đóng app đó rồi thử lại.');
+      } else {
+        setError('Không mở được camera. Kiểm tra quyền truy cập và thử lại.');
+      }
     }
   }, [stopStream]);
 
@@ -906,9 +937,32 @@ export default function CameraHome() {
         )}
       </div>
 
-      {error && <div className="cam-error">{error} <button onClick={() => startCamera(facing)}>Thử lại</button></div>}
+      {error && !permBlocked && (
+        <div className="cam-error">
+          {error} <button onClick={() => startCamera(facing)}>Thử lại</button>
+        </div>
+      )}
 
-      {phase === 'init' && !error && <div className="cam-hint">Đang mở camera…</div>}
+      {/* Quyền camera đã bị CHẶN — nút "Thử lại" vô ích, phải mở lại trong cài đặt. */}
+      {permBlocked && (
+        <div className="cam-stall">
+          <b>Camera đang bị chặn</b>
+          <p>
+            {inApp?.os === 'ios'
+              ? 'Mở lại: bấm "aA" bên trái thanh địa chỉ → Cài đặt trang web → Camera → Cho phép. Rồi tải lại trang.'
+              : 'Mở lại: bấm biểu tượng 🔒 (hoặc ⓘ) bên trái thanh địa chỉ → Quyền → Camera → Cho phép. Rồi tải lại trang.'}
+          </p>
+          <div className="cam-stall-acts">
+            <button className="btn" onClick={() => window.location.reload()}>
+              Tải lại trang
+            </button>
+          </div>
+        </div>
+      )}
+
+      {phase === 'init' && !error && !permBlocked && (
+        <div className="cam-hint">Đang mở camera…</div>
+      )}
 
       {/* Camera mở được nhưng không ra hình — thường do webview app nhắn tin. */}
       {stalled && !error && (
