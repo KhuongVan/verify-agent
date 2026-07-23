@@ -46,6 +46,8 @@ export default function CameraHome() {
   const seenIntroRef = useRef(false);
   /** Đang gọi /api/reserve — tránh đặt mã trùng lặp. */
   const reservingRef = useRef(false);
+  /** Toạ độ X lúc bắt đầu chạm — để nhận cử chỉ vuốt đổi ảnh ở màn Xem lại. */
+  const touchXRef = useRef<number | null>(null);
 
   const [facing, setFacing] = useState<Facing>('environment');
   const [mode, setMode] = useState<Mode>('photo');
@@ -66,6 +68,8 @@ export default function CameraHome() {
   const [note, setNote] = useState('');
   /** Mục đang xem lớn ở trang "Xem lại". */
   const [previewId, setPreviewId] = useState<string | null>(null);
+  /** Mở ảnh toàn màn hình (lightbox) để soi kỹ trước khi gửi. */
+  const [zoomed, setZoomed] = useState(false);
   const [result, setResult] = useState<{ code: string; url: string; count: number } | null>(null);
   const [copied, setCopied] = useState(false);
   /** Mã đặt trước (để share() gọi được ngay trong cú bấm, xem createLink). */
@@ -155,6 +159,11 @@ export default function CameraHome() {
         reservingRef.current = false;
       });
   }, [phase, reservedCode]);
+
+  // Rời màn Xem lại thì đóng lightbox, tránh nó còn mở khi quay lại lần sau.
+  useEffect(() => {
+    if (phase !== 'review') setZoomed(false);
+  }, [phase]);
 
   // Đóng tab lúc ảnh chưa upload xong sẽ để link dang dở — cảnh báo trước.
   useEffect(() => {
@@ -589,6 +598,18 @@ export default function CameraHome() {
   // ---- Trang xem lại trước khi gửi ----
   if (phase === 'review') {
     const current = shots.find((s) => s.id === previewId) ?? shots[0];
+    const curIdx = Math.max(0, shots.findIndex((s) => s.id === current?.id));
+    const multi = shots.length > 1;
+    const goTo = (i: number) => {
+      if (i >= 0 && i < shots.length) setPreviewId(shots[i].id);
+    };
+    const onTouchEnd = (e: React.TouchEvent) => {
+      const start = touchXRef.current;
+      touchXRef.current = null;
+      if (start === null) return;
+      const dx = e.changedTouches[0].clientX - start;
+      if (Math.abs(dx) > 40) goTo(curIdx + (dx < 0 ? 1 : -1)); // vuốt trái -> ảnh sau
+    };
 
     return (
       <main className="review">
@@ -602,43 +623,82 @@ export default function CameraHome() {
           </button>
         </header>
 
-        {/* Khung xem lớn — bấm thumbnail bên dưới để đổi mục. */}
-        <div className="rv-stage">
+        {/* Khung xem lớn — vuốt hoặc bấm mũi tên để đổi mục. Xoá ở thumbnail dưới. */}
+        <div
+          className="rv-stage"
+          onTouchStart={(e) => (touchXRef.current = e.touches[0].clientX)}
+          onTouchEnd={onTouchEnd}
+        >
           {current &&
             (current.kind === 'photo' ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={current.url} alt="Mục vừa chụp" />
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={current.url} alt="Mục vừa chụp" onClick={() => setZoomed(true)} />
+                <span className="rv-zoom-hint" aria-hidden>
+                  ⛶
+                </span>
+              </>
             ) : (
               <video src={current.url} controls playsInline preload="metadata" />
             ))}
-          {current && (
-            <button className="rv-del" onClick={() => removeShot(current.id)}>
-              Xoá mục này
-            </button>
+
+          {multi && (
+            <>
+              <button
+                className="rv-nav prev"
+                onClick={() => goTo(curIdx - 1)}
+                disabled={curIdx === 0}
+                aria-label="Mục trước"
+              >
+                ‹
+              </button>
+              <button
+                className="rv-nav next"
+                onClick={() => goTo(curIdx + 1)}
+                disabled={curIdx === shots.length - 1}
+                aria-label="Mục sau"
+              >
+                ›
+              </button>
+              <span className="rv-counter">
+                {curIdx + 1}/{shots.length}
+              </span>
+            </>
           )}
         </div>
 
-        {shots.length > 1 && (
+        {multi && (
           <div className="rv-strip">
             {shots.map((s) => (
-              <button
+              <div
                 key={s.id}
                 className={`rv-thumb${s.id === current?.id ? ' on' : ''}`}
-                onClick={() => setPreviewId(s.id)}
-                aria-label={`Xem mục ${s.kind === 'photo' ? 'ảnh' : 'video'}`}
               >
-                {s.kind === 'photo' ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={s.url} alt="" />
-                ) : (
-                  <video src={s.url} muted playsInline />
-                )}
-                {s.kind === 'video' && (
-                  <span className="v" aria-hidden>
-                    ▶
-                  </span>
-                )}
-              </button>
+                <button
+                  className="rv-thumb-pick"
+                  onClick={() => setPreviewId(s.id)}
+                  aria-label={`Xem mục ${s.kind === 'photo' ? 'ảnh' : 'video'}`}
+                >
+                  {s.kind === 'photo' ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={s.url} alt="" />
+                  ) : (
+                    <video src={s.url} muted playsInline />
+                  )}
+                  {s.kind === 'video' && (
+                    <span className="v" aria-hidden>
+                      ▶
+                    </span>
+                  )}
+                </button>
+                <button
+                  className="rv-thumb-x"
+                  onClick={() => removeShot(s.id)}
+                  aria-label="Xoá mục này"
+                >
+                  ×
+                </button>
+              </div>
             ))}
           </div>
         )}
@@ -696,6 +756,61 @@ export default function CameraHome() {
             🔒 Tạo link ({shots.length})
           </button>
         </div>
+
+        {/* Lightbox — chạm ảnh lớn để soi toàn màn hình. Chạm nền hoặc ✕ để đóng. */}
+        {zoomed && current && (
+          <div
+            className="lightbox"
+            onClick={() => setZoomed(false)}
+            onTouchStart={(e) => (touchXRef.current = e.touches[0].clientX)}
+            onTouchEnd={onTouchEnd}
+          >
+            <button className="lb-close" aria-label="Đóng">
+              ✕
+            </button>
+            {current.kind === 'photo' ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={current.url} alt="Xem toàn màn hình" onClick={(e) => e.stopPropagation()} />
+            ) : (
+              <video
+                src={current.url}
+                controls
+                playsInline
+                autoPlay
+                onClick={(e) => e.stopPropagation()}
+              />
+            )}
+            {multi && (
+              <>
+                <button
+                  className="rv-nav prev"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    goTo(curIdx - 1);
+                  }}
+                  disabled={curIdx === 0}
+                  aria-label="Mục trước"
+                >
+                  ‹
+                </button>
+                <button
+                  className="rv-nav next"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    goTo(curIdx + 1);
+                  }}
+                  disabled={curIdx === shots.length - 1}
+                  aria-label="Mục sau"
+                >
+                  ›
+                </button>
+                <span className="rv-counter">
+                  {curIdx + 1}/{shots.length}
+                </span>
+              </>
+            )}
+          </div>
+        )}
       </main>
     );
   }
