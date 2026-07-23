@@ -697,8 +697,13 @@ h1.title {
 /* ---- done screen ---- */
 .done-screen {
   min-height: 100dvh;
-  display: grid;
-  place-items: center;
+  /* Flex, KHÔNG grid: grid cột auto co theo max-content của card (430px) nên card
+     không hạ xuống dưới 430 dù màn hẹp hơn -> tràn ngang. Flex thì width:100%
+     của card áp đúng theo bề rộng màn hình. */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   padding: 20px 16px;
   background: var(--paper);
 }
@@ -1310,8 +1315,11 @@ h1.title {
 /* ---- Màn chào (lần đầu vào app) ---- */
 .intro {
   min-height: 100dvh;
-  display: grid;
-  place-items: center;
+  /* Cùng lý do như .done-screen: flex để card không bị ghim ở 430px. */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   padding: 20px 16px;
   background: var(--paper);
 }
