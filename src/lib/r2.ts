@@ -37,19 +37,21 @@ const objectUrl = (key: string) => `${r2().base}/${key}`;
 
 /** Ghi một object. key = "<code>/<id>.<ext>". */
 export async function putObject(key: string, bytes: Buffer, contentType: string): Promise<void> {
-  const res = await r2().client.fetch(objectUrl(key), {
+  // Ký thành PRESIGNED URL (chữ ký nằm trong query), KHÔNG bọc body qua aws4fetch.
+  // Lý do: aws4fetch.fetch() bọc body vào một Request rồi fetch(Request) -> undici
+  // đọc body dạng stream -> gửi chunked KHÔNG có Content-Length -> R2 trả 411.
+  // PUT thẳng bằng fetch chuẩn với Buffer thì undici tự đặt Content-Length.
+  const signed = await r2().client.sign(objectUrl(key), {
     method: 'PUT',
-    // Body dạng Blob: có kích thước cố định nên fetch tự đặt Content-Length. Nếu
-    // truyền Uint8Array trực tiếp, aws4fetch biến nó thành stream -> gửi kiểu
-    // chunked KHÔNG kèm Content-Length -> R2 trả 411 MissingContentLength.
-    body: new Blob([bytes as unknown as BlobPart], { type: contentType }),
+    aws: { signQuery: true },
+  });
+
+  const res = await fetch(signed.url, {
+    method: 'PUT',
+    body: bytes as unknown as BodyInit,
     headers: {
       'Content-Type': contentType,
-      // Media bất biến (mỗi mã một lần) -> cache dài, CDN Cloudflare phục vụ.
       'Cache-Control': 'public, max-age=31536000, immutable',
-      // Đặt sẵn để aws4fetch KHÔNG băm lại body (không đọc Blob được) -> giữ
-      // nguyên body có Content-Length. R2 chấp nhận unsigned payload qua HTTPS.
-      'X-Amz-Content-Sha256': 'UNSIGNED-PAYLOAD',
     },
   });
   if (!res.ok) {
