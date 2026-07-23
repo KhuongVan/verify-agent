@@ -30,6 +30,21 @@ export function extFromMime(mime: string): string {
   return MIME_EXT[mime] ?? 'bin';
 }
 
+/**
+ * URL để khách tải media.
+ *
+ * Có NEXT_PUBLIC_R2_PUBLIC_BASE (production) -> tải THẲNG từ R2 qua custom domain,
+ * egress miễn phí, đường dẫn khớp key upload "<code>/<id>.<ext>" (xem lib/r2.ts).
+ *
+ * Không có (dev local, hoặc chưa cấu hình R2) -> lùi về proxy /api/media để vẫn
+ * xem được ảnh từ filesystem. NEXT_PUBLIC_ vì client (Gallery) dựng <img src>.
+ */
+export function mediaUrl(code: string, item: { id: string; ext: string }): string {
+  const base = (process.env.NEXT_PUBLIC_R2_PUBLIC_BASE ?? '').replace(/\/$/, '');
+  if (!base) return `/api/media/${code}/${item.id}`;
+  return `${base}/${code}/${item.id}.${item.ext}`;
+}
+
 export function isVideo(mime: string): boolean {
   return mime.startsWith('video/');
 }

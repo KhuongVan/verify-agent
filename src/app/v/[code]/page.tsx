@@ -9,7 +9,7 @@ import { getConsent } from '@/lib/consent-server';
 import { resolveFbc, sendMetaEvent } from '@/lib/meta-capi';
 import { verify, type SealedFacts } from '@/lib/seal';
 import { countByShop, getAlbum } from '@/lib/store';
-import { formatVN } from '@/lib/util';
+import { formatVN, mediaUrl } from '@/lib/util';
 import Gallery, { type Slide } from './Gallery';
 import PendingWatcher from './PendingWatcher';
 import SealCheck from './SealCheck';
@@ -110,10 +110,11 @@ export default async function VerifyPage({
   const shopCount = await countByShop(shopName);
   const avatar = shopName.trim().charAt(0).toUpperCase() || 'S';
 
+  // Media tải THẲNG từ R2 (custom domain) -> egress miễn phí, không qua Vercel.
   const slides: Slide[] = album.items.map((i) => ({
     id: i.id,
     kind: i.kind,
-    src: `/api/media/${album.code}/${i.id}`,
+    src: mediaUrl(album.code, i),
   }));
 
   return (

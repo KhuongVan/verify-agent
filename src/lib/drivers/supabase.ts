@@ -1,13 +1,13 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { deleteObjects, getObject, putObject } from '../r2';
 import type { Album, ConsentEntry, Item, ItemBytes, StoreDriver } from '../store';
 
 /**
- * Driver Supabase — metadata album ở Postgres (bảng `albums`, cột `items` JSONB),
- * media ở Storage bucket `media` (private, path <code>/<id>.<ext>).
+ * Driver Supabase — metadata album ở Postgres (bảng `albums`, cột `items` JSONB).
+ * MEDIA (bytes ảnh/video) lưu trên Cloudflare R2 (xem lib/r2.ts) để egress miễn
+ * phí; khách tải thẳng từ R2 qua custom domain. Supabase chỉ còn giữ metadata.
  * Chỉ chạy phía server bằng service role key. Xem supabase/schema.sql.
  */
-
-const BUCKET = 'media';
 
 type Row = {
   code: string;
@@ -56,23 +56,23 @@ export function createSupabaseDriver(): StoreDriver {
       }
     },
     async saveAlbum(album: Album, files: ItemBytes[]) {
+      // 1) Bytes -> R2.
       const uploaded: string[] = [];
       for (const f of files) {
         const item = album.items.find((i) => i.id === f.id);
         if (!item) continue;
         const key = objectPath(album.code, item);
-        const up = await supabase.storage
-          .from(BUCKET)
-          .upload(key, f.bytes, { contentType: item.mimeType, upsert: false });
-        if (up.error) {
-          if (uploaded.length) await supabase.storage.from(BUCKET).remove(uploaded);
-          throw new Error(`Storage upload lỗi: ${up.error.message}`);
+        try {
+          await putObject(key, f.bytes, item.mimeType);
+        } catch (e) {
+          if (uploaded.length) await deleteObjects(uploaded);
+          throw e;
         }
         uploaded.push(key);
       }
 
-      // Upsert theo code: lấp bản ghi đã reserve (items=[]) thành đầy đủ.
-      // Cũng chạy đúng khi chưa reserve (đường cũ) — khi đó là insert thường.
+      // 2) Metadata -> Postgres. Upsert theo code: lấp bản ghi đã reserve
+      //    (items=[]) thành đầy đủ; chưa reserve thì là insert thường.
       const ins = await supabase.from('albums').upsert(
         {
           code: album.code,
@@ -86,7 +86,7 @@ export function createSupabaseDriver(): StoreDriver {
         { onConflict: 'code' },
       );
       if (ins.error) {
-        if (uploaded.length) await supabase.storage.from(BUCKET).remove(uploaded);
+        if (uploaded.length) await deleteObjects(uploaded);
         throw new Error(`Ghi metadata lỗi: ${ins.error.message}`);
       }
     },
@@ -102,9 +102,8 @@ export function createSupabaseDriver(): StoreDriver {
     },
 
     async getItemBytes(code, item) {
-      const { data, error } = await supabase.storage.from(BUCKET).download(objectPath(code, item));
-      if (error || !data) throw new Error(`Tải media lỗi: ${error?.message ?? 'không có dữ liệu'}`);
-      return Buffer.from(await data.arrayBuffer());
+      // Đọc từ R2 (server -> R2, egress vẫn miễn phí). Dùng cho verify.
+      return getObject(objectPath(code, item));
     },
 
     async countByShop(shopName) {
