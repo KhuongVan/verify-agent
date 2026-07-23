@@ -39,12 +39,17 @@ const objectUrl = (key: string) => `${r2().base}/${key}`;
 export async function putObject(key: string, bytes: Buffer, contentType: string): Promise<void> {
   const res = await r2().client.fetch(objectUrl(key), {
     method: 'PUT',
-    // Buffer LÀ Uint8Array ở runtime (fetch nhận được); type-def của aws4fetch hẹp hơn.
-    body: bytes as unknown as BodyInit,
+    // Body dạng Blob: có kích thước cố định nên fetch tự đặt Content-Length. Nếu
+    // truyền Uint8Array trực tiếp, aws4fetch biến nó thành stream -> gửi kiểu
+    // chunked KHÔNG kèm Content-Length -> R2 trả 411 MissingContentLength.
+    body: new Blob([bytes as unknown as BlobPart], { type: contentType }),
     headers: {
       'Content-Type': contentType,
       // Media bất biến (mỗi mã một lần) -> cache dài, CDN Cloudflare phục vụ.
       'Cache-Control': 'public, max-age=31536000, immutable',
+      // Đặt sẵn để aws4fetch KHÔNG băm lại body (không đọc Blob được) -> giữ
+      // nguyên body có Content-Length. R2 chấp nhận unsigned payload qua HTTPS.
+      'X-Amz-Content-Sha256': 'UNSIGNED-PAYLOAD',
     },
   });
   if (!res.ok) {
