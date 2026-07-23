@@ -20,7 +20,7 @@ import { androidBrowserIntent, detectInApp, iosSafariUrl, type InAppInfo } from 
 
 type Facing = 'environment' | 'user';
 type Mode = 'photo' | 'video';
-type Phase = 'welcome' | 'inapp' | 'init' | 'live' | 'review' | 'sealing' | 'done';
+type Phase = 'welcome' | 'inapp' | 'init' | 'live' | 'review' | 'done';
 type Shot = { id: string; blob: Blob; url: string; kind: Mode };
 
 /** Đã xem màn chào lần nào chưa — người bán quen dùng vào thẳng camera. */
@@ -42,10 +42,10 @@ export default function CameraHome() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const shotsRef = useRef<Shot[]>([]);
   const idRef = useRef(0);
-  /** Đã tự mở bảng chia sẻ cho link này chưa — chỉ làm đúng một lần. */
-  const autoSharedRef = useRef(false);
   /** Đã xem màn chào chưa (đọc từ localStorage lúc khởi động). */
   const seenIntroRef = useRef(false);
+  /** Đang gọi /api/reserve — tránh đặt mã trùng lặp. */
+  const reservingRef = useRef(false);
 
   const [facing, setFacing] = useState<Facing>('environment');
   const [mode, setMode] = useState<Mode>('photo');
@@ -68,6 +68,10 @@ export default function CameraHome() {
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [result, setResult] = useState<{ code: string; url: string; count: number } | null>(null);
   const [copied, setCopied] = useState(false);
+  /** Mã đặt trước (để share() gọi được ngay trong cú bấm, xem createLink). */
+  const [reservedCode, setReservedCode] = useState<string | null>(null);
+  /** Tiến trình upload ảnh sau khi đã share link. */
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'ok' | 'error'>('idle');
 
   shotsRef.current = shots;
 
@@ -130,6 +134,38 @@ export default function CameraHome() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /**
+   * Đặt trước một MÃ ngay khi người bán vào màn "Xem lại".
+   *
+   * Mục đích: lúc bấm "Tạo link" đã có sẵn URL để gọi navigator.share() ĐỒNG BỘ
+   * trong cú chạm (điều kiện sống còn để share mở được trên iOS). Ảnh CHƯA lên —
+   * chỉ giữ mã — nên người bán vẫn xoá/chụp thêm thoải mái, mã không đổi.
+   */
+  useEffect(() => {
+    if (phase !== 'review' || reservedCode || reservingRef.current) return;
+    reservingRef.current = true;
+    fetch('/api/reserve', { method: 'POST' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => j?.code && setReservedCode(j.code))
+      .catch(() => {
+        /* đặt mã lỗi -> createLink sẽ lùi về đường cũ (server tự sinh mã) */
+      })
+      .finally(() => {
+        reservingRef.current = false;
+      });
+  }, [phase, reservedCode]);
+
+  // Đóng tab lúc ảnh chưa upload xong sẽ để link dang dở — cảnh báo trước.
+  useEffect(() => {
+    if (uploadStatus !== 'uploading') return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [uploadStatus]);
 
   /**
    * Gắn luồng camera vào thẻ <video> NGAY SAU khi thẻ đó có mặt trong DOM.
@@ -296,17 +332,48 @@ export default function CameraHome() {
     if (previewId === id) setPreviewId(rest[Math.min(idx, rest.length - 1)].id);
   }
 
-  async function send() {
-    if (shots.length === 0) return;
-    setPhase('sealing');
+  /**
+   * Bấm "Tạo link". Thứ tự CỐ Ý:
+   *   1. share() NGAY — đồng bộ, không await gì trước, để iOS Safari cho mở.
+   *   2. Chuyển màn kết quả ngay (ảnh hiện từ blob local).
+   *   3. Upload ảnh SAU, không chặn share.
+   * Nhờ đã đặt mã trước (reservedCode) nên URL có sẵn ngay ở bước 1.
+   */
+  function createLink() {
+    if (shots.length === 0 || !categoryId) return;
+    const code = reservedCode; // có thể null nếu reserve chưa xong / lỗi
+    const url = code ? `/v/${code}` : '';
+
+    // (1) Mở bảng chia sẻ ngay trong cú chạm. Không có mã hoặc máy không hỗ trợ
+    // thì bỏ qua — người bán vẫn bấm nút "Chia sẻ" ở màn kết quả được.
+    if (code && navigator.share) {
+      navigator
+        .share({ title: 'Ảnh Thật — Thấy thật trước khi mua', url: `${window.location.origin}${url}` })
+        .catch(() => {});
+    }
+
+    // (2) Sang màn kết quả ngay. count/url tạm theo mã đã đặt; nếu chưa có mã,
+    // uploadSealed sẽ điền lại từ phản hồi server.
+    stopStream();
     setError(null);
+    if (code) setResult({ code, url, count: shots.length });
+    setPhase('done');
+
+    // (3) Upload nền.
+    void uploadSealed(code);
+  }
+
+  /** Upload ảnh + niêm phong. Gắn vào mã đã đặt (nếu có). Cập nhật uploadStatus. */
+  async function uploadSealed(code: string | null) {
+    setUploadStatus('uploading');
     const data = new FormData();
-    for (const s of shots) {
+    for (const s of shotsRef.current) {
       const ext = s.kind === 'photo' ? 'jpg' : s.blob.type.split(';')[0] === 'video/mp4' ? 'mp4' : 'webm';
       const type = s.kind === 'photo' ? 'image/jpeg' : s.blob.type.split(';')[0] || 'video/webm';
       data.append('media', new File([s.blob], `${s.id}.${ext}`, { type }));
     }
     data.set('capturedAt', new Date().toISOString());
+    if (code) data.set('code', code);
     if (shopName.trim()) data.set('shopName', shopName.trim());
     if (categoryId) data.set('categoryId', categoryId);
     if (note.trim()) data.set('note', note.trim());
@@ -315,25 +382,20 @@ export default function CameraHome() {
       const res = await fetch('/api/seal', { method: 'POST', body: data });
       const json = await res.json();
       if (!res.ok) {
-        setError(json.error || 'Gửi thất bại.');
-        setPhase('review');
-      } else {
-        setResult(json);
-        setPhase('done');
-        stopStream();
-        // Gọi ngay tại đây để còn giữ được quyền mở bảng chia sẻ (xem autoShare).
-        void autoShare(`${window.location.origin}${json.url}`);
-        // Giữ blob URL để màn kết quả xem lại được ảnh vừa gửi — không tải lại
-        // từ server, không tốn thêm băng thông. Dọn ở startNew() và lúc unmount.
+        setUploadStatus('error');
+        setError(json.error || 'Lưu ảnh thất bại.');
+        return;
       }
+      // Đường không có mã đặt trước: giờ mới biết url/code từ server.
+      if (!code) setResult(json);
+      setUploadStatus('ok');
     } catch {
-      setError('Không kết nối được máy chủ.');
-      setPhase('review');
+      setUploadStatus('error');
+      setError('Mất kết nối khi tải ảnh lên.');
     }
   }
 
   function startNew() {
-    autoSharedRef.current = false;
     shots.forEach((s) => URL.revokeObjectURL(s.url));
     setShots([]);
     setResult(null);
@@ -341,6 +403,8 @@ export default function CameraHome() {
     setCategoryId('');
     setNote('');
     setCopied(false);
+    setReservedCode(null); // lần album sau đặt mã mới
+    setUploadStatus('idle');
     startCamera(facing);
   }
 
@@ -372,39 +436,6 @@ export default function CameraHome() {
       }
     }
     copyLink();
-  }
-
-  /**
-   * Tự mở bảng chia sẻ ngay khi tạo link xong, để người bán bớt một thao tác.
-   *
-   * Phải gọi TRONG send(), không phải trong useEffect: navigator.share() đòi
-   * "transient user activation" — quyền có được từ cú bấm "Tạo link" và mất dần
-   * theo thời gian. Gọi sau khi React vẽ lại thì gần như chắc chắn bị chặn.
-   *
-   * Bị chặn (thường gặp trên iOS, hoặc khi upload lâu) -> chép link vào clipboard
-   * để vẫn tiết kiệm được một thao tác. Người dùng CHỦ ĐỘNG đóng bảng chia sẻ thì
-   * không chép — đó là họ đã từ chối, không phải thất bại kỹ thuật.
-   */
-  async function autoShare(full: string) {
-    if (autoSharedRef.current) return;
-    autoSharedRef.current = true;
-
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: 'Ảnh Thật — Thấy thật trước khi mua', url: full });
-        return;
-      } catch (e) {
-        if ((e as DOMException)?.name === 'AbortError') return;
-      }
-    }
-
-    try {
-      await navigator.clipboard.writeText(full);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 3000);
-    } catch {
-      /* clipboard cũng bị chặn — người dùng vẫn có nút chia sẻ trên màn hình */
-    }
   }
 
   const mmss = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
@@ -556,23 +587,17 @@ export default function CameraHome() {
   }
 
   // ---- Trang xem lại trước khi gửi ----
-  if (phase === 'review' || phase === 'sealing') {
+  if (phase === 'review') {
     const current = shots.find((s) => s.id === previewId) ?? shots[0];
-    const sealing = phase === 'sealing';
 
     return (
       <main className="review">
         <header className="rv-bar">
-          <button
-            className="rv-back"
-            onClick={() => setPhase('live')}
-            disabled={sealing}
-            aria-label="Quay lại chụp"
-          >
+          <button className="rv-back" onClick={() => setPhase('live')} aria-label="Quay lại chụp">
             ←
           </button>
           <h1>Xem lại {shots.length} mục</h1>
-          <button className="rv-add" onClick={() => setPhase('live')} disabled={sealing}>
+          <button className="rv-add" onClick={() => setPhase('live')}>
             + Chụp thêm
           </button>
         </header>
@@ -586,7 +611,7 @@ export default function CameraHome() {
             ) : (
               <video src={current.url} controls playsInline preload="metadata" />
             ))}
-          {current && !sealing && (
+          {current && (
             <button className="rv-del" onClick={() => removeShot(current.id)}>
               Xoá mục này
             </button>
@@ -664,11 +689,11 @@ export default function CameraHome() {
           <button
             className="btn"
             style={{ width: '100%' }}
-            onClick={send}
-            disabled={sealing || shots.length === 0 || !categoryId}
+            onClick={createLink}
+            disabled={shots.length === 0 || !categoryId}
             title={!categoryId ? 'Hãy chọn ngành hàng trước' : undefined}
           >
-            {sealing ? 'Đang xác minh…' : `🔒 Tạo link (${shots.length})`}
+            🔒 Tạo link ({shots.length})
           </button>
         </div>
       </main>
@@ -713,6 +738,18 @@ export default function CameraHome() {
             <div className="done-preview empty">{result.count} media đã xác minh</div>
           )}
           <p className="done-count">{result.count} media đã xác minh</p>
+
+          {uploadStatus === 'uploading' && (
+            <p className="upload-note">Đang lưu ảnh lên máy chủ… đừng đóng trang nhé.</p>
+          )}
+          {uploadStatus === 'error' && (
+            <div className="upload-note err">
+              <span>Lưu ảnh chưa xong. {error}</span>
+              <button className="btn-copy" onClick={() => uploadSealed(result.code)}>
+                Thử lại
+              </button>
+            </div>
+          )}
 
           <div className="link-box">
             <span className="link-text">{shown}</span>

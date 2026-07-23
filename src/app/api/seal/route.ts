@@ -33,7 +33,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Tối đa ${MAX_ITEMS} mục mỗi lần gửi.` }, { status: 413 });
   }
 
-  const code = newCode();
+  // Dùng lại mã đã đặt trước (client gửi lên) nếu có; không thì sinh mới (đường cũ).
+  const reserved = form.get('code');
+  const code = typeof reserved === 'string' && /^[0-9A-Z]{4}-[0-9A-Z]{4}$/.test(reserved)
+    ? reserved
+    : newCode();
   const sealedAt = new Date().toISOString();
   const items: Item[] = [];
   const bytesList: ItemBytes[] = [];

@@ -1615,3 +1615,50 @@ h1.title {
   color: rgba(255, 255, 255, 0.85);
   border-color: rgba(255, 255, 255, 0.35);
 }
+
+/* Trạng thái upload ở màn "Đã xác minh" */
+.upload-note {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--ink-mute);
+  text-align: center;
+}
+.upload-note.err {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  color: var(--danger);
+}
+
+/* Trang khách khi ảnh chưa upload xong */
+.vp-pending {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+  padding: 64px 24px;
+}
+.vp-pending b {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.vp-pending span:not(.spin) {
+  max-width: 30ch;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+.vp-pending .spin {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid var(--line);
+  border-top-color: var(--verify);
+  animation: vp-spin 0.8s linear infinite;
+  margin-bottom: 6px;
+}
+@keyframes vp-spin {
+  to { transform: rotate(360deg); }
+}

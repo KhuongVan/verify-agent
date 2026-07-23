@@ -48,6 +48,8 @@ export type ConsentEntry = {
 };
 
 export interface StoreDriver {
+  /** Đặt trước một mã (bản ghi rỗng, items=[]) để client biết URL trước khi upload. */
+  reserveAlbum(code: string): Promise<void>;
   saveAlbum(album: Album, files: ItemBytes[]): Promise<void>;
   getAlbum(code: string): Promise<Album | null>;
   getItemBytes(code: string, item: Item): Promise<Buffer>;
@@ -71,6 +73,10 @@ function driver(): Promise<StoreDriver> {
         : import('./drivers/local').then((m) => m.createLocalDriver());
   }
   return driverPromise;
+}
+
+export async function reserveAlbum(code: string): Promise<void> {
+  return (await driver()).reserveAlbum(code);
 }
 
 export async function saveAlbum(album: Album, files: ItemBytes[]): Promise<void> {

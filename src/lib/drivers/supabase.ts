@@ -44,6 +44,17 @@ export function createSupabaseDriver(): StoreDriver {
   });
 
   return {
+    async reserveAlbum(code: string) {
+      // Bản ghi rỗng giữ chỗ. items=[] => trang khách hiểu là "đang tải".
+      // Không đè nếu đã tồn tại (tránh xoá mất album đã seal nếu trùng mã hiếm gặp).
+      const { error } = await supabase
+        .from('albums')
+        .insert({ code, sealed_at: new Date().toISOString(), items: [] });
+      if (error && error.code !== '23505') {
+        // 23505 = unique_violation: mã đã tồn tại, coi như đặt chỗ thành công.
+        throw new Error(`Đặt mã lỗi: ${error.message}`);
+      }
+    },
     async saveAlbum(album: Album, files: ItemBytes[]) {
       const uploaded: string[] = [];
       for (const f of files) {
@@ -60,15 +71,20 @@ export function createSupabaseDriver(): StoreDriver {
         uploaded.push(key);
       }
 
-      const ins = await supabase.from('albums').insert({
-        code: album.code,
-        sealed_at: album.sealedAt,
-        items: album.items,
-        shop_name: album.shopName ?? null,
-        seller_note: album.sellerNote ?? null,
-        client_location: album.clientLocation ?? null,
-        category_id: album.categoryId ?? null,
-      });
+      // Upsert theo code: lấp bản ghi đã reserve (items=[]) thành đầy đủ.
+      // Cũng chạy đúng khi chưa reserve (đường cũ) — khi đó là insert thường.
+      const ins = await supabase.from('albums').upsert(
+        {
+          code: album.code,
+          sealed_at: album.sealedAt,
+          items: album.items,
+          shop_name: album.shopName ?? null,
+          seller_note: album.sellerNote ?? null,
+          client_location: album.clientLocation ?? null,
+          category_id: album.categoryId ?? null,
+        },
+        { onConflict: 'code' },
+      );
       if (ins.error) {
         if (uploaded.length) await supabase.storage.from(BUCKET).remove(uploaded);
         throw new Error(`Ghi metadata lỗi: ${ins.error.message}`);

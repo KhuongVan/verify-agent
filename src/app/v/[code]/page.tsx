@@ -11,6 +11,7 @@ import { verify, type SealedFacts } from '@/lib/seal';
 import { countByShop, getAlbum } from '@/lib/store';
 import { formatVN } from '@/lib/util';
 import Gallery, { type Slide } from './Gallery';
+import PendingWatcher from './PendingWatcher';
 import SealCheck from './SealCheck';
 
 export const runtime = 'nodejs';
@@ -34,6 +35,29 @@ export default async function VerifyPage({
 }) {
   const album = await getAlbum(params.code);
   if (!album) notFound();
+
+  // Album vừa đặt mã, ảnh chưa upload xong (người bán vừa chia sẻ link). Hiện
+  // "đang tải" + tự làm mới; KHÔNG track/verify khi chưa có item (tránh đếm 2 lần
+  // vì trang sẽ reload khi ready).
+  if (album.items.length === 0) {
+    return (
+      <main className="vp">
+        <header className="vp-bar">
+          <Link href="/" className="vp-brand" aria-label="Ảnh Thật — về trang chụp">
+            <img src="/logo-mark.png" alt="" className="brand-logo" />
+            <span>Ảnh Thật</span>
+          </Link>
+          <span className="vp-bar-tag">Thấy thật trước khi mua</span>
+        </header>
+        <div className="vp-pending">
+          <span className="spin" aria-hidden />
+          <b>Đang tải ảnh…</b>
+          <span>Người bán vừa gửi, ảnh đang lên máy chủ. Trang sẽ tự hiện khi xong.</span>
+        </div>
+        <PendingWatcher code={album.code} />
+      </main>
+    );
+  }
 
   // --- Tracking (chỉ khi ĐÃ đồng ý) -------------------------------------
   // eventId sinh MỘT lần ở server, dùng chung cho cả server lẫn client pixel

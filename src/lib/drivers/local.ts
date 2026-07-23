@@ -38,6 +38,12 @@ function itemPath(code: string, item: Pick<Item, 'id' | 'ext'>): string {
 
 export function createLocalDriver(): StoreDriver {
   return {
+    async reserveAlbum(code: string) {
+      const list = readAll();
+      if (list.some((a) => a.code === code)) return; // đã có -> giữ nguyên
+      list.push({ code, sealedAt: new Date().toISOString(), items: [] });
+      writeAll(list);
+    },
     async saveAlbum(album: Album, files: ItemBytes[]) {
       ensure();
       fs.mkdirSync(path.join(MEDIA_DIR, album.code), { recursive: true });
@@ -46,8 +52,11 @@ export function createLocalDriver(): StoreDriver {
         if (!item) continue;
         fs.writeFileSync(itemPath(album.code, item), f.bytes);
       }
+      // Upsert: lấp bản ghi đã reserve (cùng code) thay vì thêm trùng.
       const list = readAll();
-      list.push(album);
+      const idx = list.findIndex((a) => a.code === album.code);
+      if (idx >= 0) list[idx] = album;
+      else list.push(album);
       writeAll(list);
     },
     async getAlbum(code) {
