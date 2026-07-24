@@ -1498,23 +1498,28 @@ h1.title {
 .rv-stage {
   position: relative;
   background: #000;
-  display: grid;
-  place-items: center;
-  /* svh (không phải dvh): chiều cao không đổi khi thanh địa chỉ ẩn/hiện lúc
-     vuốt, tránh khung bị "nhảy"/rung theo chiều dọc khi thao tác tay. */
-  min-height: 46svh;
-  max-height: 60svh;
   overflow: hidden;
+  /* CHIỀU CAO CỐ ĐỊNH (không phải min/max theo nội dung): nếu để nội dung tự
+     quyết chiều cao, mỗi lần đổi mục (ảnh dọc <-> video ngang, hoặc video mới
+     chưa tải metadata nên chưa có kích thước) khung sẽ co giãn -> cả trang phía
+     dưới nhảy lên xuống, gây "giật". Ghim cứng thì đổi mục bao nhiêu cũng đứng
+     yên, chỉ nội dung bên trong đổi.
+     svh (không dvh): không co theo thanh địa chỉ ẩn/hiện lúc vuốt. */
+  height: 56svh;
   /* Chỉ cho cử chỉ ngang bắt đầu từ khung này — chặn trình duyệt cuốn trang
      theo chiều dọc khi người dùng vuốt đổi ảnh, tránh cảm giác lung lay. */
   touch-action: pan-x;
 }
+/* Định vị tuyệt đối lấp đầy khung rồi để object-fit canh giữa: video mới mount
+   dù chưa có kích thước nội tại vẫn chiếm trọn khung (nền đen), không làm khung
+   sập rồi bung -> không còn cú nhảy layout khi chuyển sang video. */
 .rv-stage img,
 .rv-stage video {
+  position: absolute;
+  inset: 0;
   width: 100%;
-  max-height: 60svh;
+  height: 100%;
   object-fit: contain;
-  display: block;
   background: #000;
 }
 /* Mũi tên chuyển ảnh ở khung lớn — mờ, không chắn ảnh. */
