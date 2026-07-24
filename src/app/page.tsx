@@ -40,6 +40,16 @@ async function isCameraBlocked(): Promise<boolean> {
   }
 }
 
+/** Quy đổi độ phân giải thật của track camera sang nhãn dễ hiểu (theo cạnh ngắn). */
+function qualityLabel(width: number, height: number): string {
+  const p = Math.min(width, height);
+  if (p >= 2160) return '4K';
+  if (p >= 1440) return '2K';
+  if (p >= 1080) return 'Full HD';
+  if (p >= 720) return 'HD';
+  return `${p}p`;
+}
+
 function pickMime(): string {
   const cands = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'];
   for (const c of cands) {
@@ -76,6 +86,8 @@ export default function CameraHome() {
   const [permBlocked, setPermBlocked] = useState(false);
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
+  /** Nhãn chất lượng của luồng camera hiện tại (vd. "Full HD") — lấy từ track thật, không phải số xin. */
+  const [quality, setQuality] = useState<string | null>(null);
   const [shots, setShots] = useState<Shot[]>([]);
   const [flash, setFlash] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -108,15 +120,21 @@ export default function CameraHome() {
       return;
     }
     stopStream();
+    setQuality(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: want },
+        video: { facingMode: want, width: { ideal: 1920 }, height: { ideal: 1080 } },
         audio: true,
       });
       streamRef.current = stream;
       if (liveRef.current) {
         liveRef.current.srcObject = stream;
         await liveRef.current.play().catch(() => {});
+      }
+      // Thiết bị có thể không đáp ứng đúng 1920x1080 xin ở trên -> đọc số thật từ track.
+      const settings = stream.getVideoTracks()[0]?.getSettings();
+      if (settings?.width && settings?.height) {
+        setQuality(qualityLabel(settings.width, settings.height));
       }
       setPhase('live');
     } catch (e) {
@@ -930,6 +948,7 @@ export default function CameraHome() {
       {/* Top bar */}
       <div className="cam-top">
         <div className="cam-brand"><img src="/logo-mark.png" alt="Ảnh Thật" className="brand-logo" /><span>Ảnh Thật</span></div>
+        {quality && <div className="cam-quality">{quality}</div>}
         {recording ? (
           <div className="cam-rec"><span className="rec-dot" /> {mmss}</div>
         ) : (
