@@ -59,6 +59,28 @@ export async function putObject(key: string, bytes: Buffer, contentType: string)
   }
 }
 
+/**
+ * Ký một PRESIGNED PUT URL để CLIENT tải file THẲNG lên R2 (không qua serverless).
+ *
+ * Vì sao: route handler trên Vercel giới hạn body ~4.5MB — video Full HD (nhất là
+ * mp4/H.264 của iOS) vượt ngưỡng này nên upload qua /api/seal bị chặn. PUT thẳng
+ * lên R2 không dính giới hạn đó.
+ *
+ * Chữ ký nằm trong query (signQuery) nên client chỉ cần fetch(url, {method:'PUT',
+ * body}) — KHÔNG cần thêm header xác thực. Content-Type/Cache-Control client tự
+ * đặt, không nằm trong chữ ký (giống putObject ở trên). Hết hạn sau `expiresIn` giây.
+ */
+export async function presignPut(key: string, expiresIn = 600): Promise<string> {
+  // X-Amz-Expires nằm trong query (cách chuẩn của SigV4 presigned) và được ký cùng.
+  const url = new URL(objectUrl(key));
+  url.searchParams.set('X-Amz-Expires', String(expiresIn));
+  const signed = await r2().client.sign(url.toString(), {
+    method: 'PUT',
+    aws: { signQuery: true },
+  });
+  return signed.url;
+}
+
 /** Đọc một object về Buffer (dùng cho verify: server băm lại media). */
 export async function getObject(key: string): Promise<Buffer> {
   const res = await r2().client.fetch(objectUrl(key), { method: 'GET' });

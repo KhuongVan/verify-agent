@@ -55,6 +55,24 @@ export function createSupabaseDriver(): StoreDriver {
         throw new Error(`Đặt mã lỗi: ${error.message}`);
       }
     },
+    // Upsert theo code: lấp bản ghi đã reserve (items=[]) thành đầy đủ; chưa
+    // reserve thì là insert thường.
+    async saveAlbumMeta(album: Album) {
+      const ins = await supabase.from('albums').upsert(
+        {
+          code: album.code,
+          sealed_at: album.sealedAt,
+          items: album.items,
+          shop_name: album.shopName ?? null,
+          seller_note: album.sellerNote ?? null,
+          client_location: album.clientLocation ?? null,
+          category_id: album.categoryId ?? null,
+        },
+        { onConflict: 'code' },
+      );
+      if (ins.error) throw new Error(`Ghi metadata lỗi: ${ins.error.message}`);
+    },
+
     async saveAlbum(album: Album, files: ItemBytes[]) {
       // 1) Bytes -> R2.
       const uploaded: string[] = [];
@@ -71,23 +89,12 @@ export function createSupabaseDriver(): StoreDriver {
         uploaded.push(key);
       }
 
-      // 2) Metadata -> Postgres. Upsert theo code: lấp bản ghi đã reserve
-      //    (items=[]) thành đầy đủ; chưa reserve thì là insert thường.
-      const ins = await supabase.from('albums').upsert(
-        {
-          code: album.code,
-          sealed_at: album.sealedAt,
-          items: album.items,
-          shop_name: album.shopName ?? null,
-          seller_note: album.sellerNote ?? null,
-          client_location: album.clientLocation ?? null,
-          category_id: album.categoryId ?? null,
-        },
-        { onConflict: 'code' },
-      );
-      if (ins.error) {
+      // 2) Metadata -> Postgres.
+      try {
+        await this.saveAlbumMeta(album);
+      } catch (e) {
         if (uploaded.length) await deleteObjects(uploaded);
-        throw new Error(`Ghi metadata lỗi: ${ins.error.message}`);
+        throw e;
       }
     },
 

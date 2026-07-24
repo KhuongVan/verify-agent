@@ -52,6 +52,10 @@ export function createLocalDriver(): StoreDriver {
         if (!item) continue;
         fs.writeFileSync(itemPath(album.code, item), f.bytes);
       }
+      await this.saveAlbumMeta(album);
+    },
+    // Chỉ metadata (dev/local hiếm khi dùng đường R2-direct, nhưng interface cần).
+    async saveAlbumMeta(album: Album) {
       // Upsert: lấp bản ghi đã reserve (cùng code) thay vì thêm trùng.
       const list = readAll();
       const idx = list.findIndex((a) => a.code === album.code);

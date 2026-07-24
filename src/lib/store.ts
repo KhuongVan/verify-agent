@@ -51,6 +51,11 @@ export interface StoreDriver {
   /** Đặt trước một mã (bản ghi rỗng, items=[]) để client biết URL trước khi upload. */
   reserveAlbum(code: string): Promise<void>;
   saveAlbum(album: Album, files: ItemBytes[]): Promise<void>;
+  /**
+   * Lưu CHỈ metadata — bytes đã nằm sẵn trên R2 do client PUT thẳng lên (xem
+   * lib/r2 presignPut). Chỉ dùng ở chế độ có R2 (supabase).
+   */
+  saveAlbumMeta(album: Album): Promise<void>;
   getAlbum(code: string): Promise<Album | null>;
   getItemBytes(code: string, item: Item): Promise<Buffer>;
   countByShop(shopName: string): Promise<number>;
@@ -81,6 +86,10 @@ export async function reserveAlbum(code: string): Promise<void> {
 
 export async function saveAlbum(album: Album, files: ItemBytes[]): Promise<void> {
   return (await driver()).saveAlbum(album, files);
+}
+
+export async function saveAlbumMeta(album: Album): Promise<void> {
+  return (await driver()).saveAlbumMeta(album);
 }
 
 export async function getAlbum(code: string): Promise<Album | null> {

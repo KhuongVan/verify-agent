@@ -1681,6 +1681,18 @@ h1.title {
   bottom: 0;
   background: var(--paper);
 }
+/* Tổng dung lượng media hiện tại; đỏ + đậm khi vượt giới hạn. */
+.rv-size {
+  margin: 0 0 10px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--ink-mute);
+  font-variant-numeric: tabular-nums;
+}
+.rv-size.over {
+  color: var(--danger);
+  font-weight: 600;
+}
 .done-copied {
   margin: 0;
   text-align: center;

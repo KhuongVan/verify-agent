@@ -25,6 +25,15 @@ type Shot = { id: string; blob: Blob; url: string; kind: Mode };
 /** Đã xem màn chào lần nào chưa — người bán quen dùng vào thẳng camera. */
 const INTRO_KEY = 'at_seen_intro';
 
+/** Giới hạn tổng dung lượng media mỗi lần tạo link. Khớp MAX_TOTAL_BYTES ở /api/seal. */
+const MAX_TOTAL_BYTES = 100 * 1024 * 1024;
+
+/** Dung lượng gọn cho người bán: KB dưới 1MB, còn lại MB. */
+function formatSize(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 /**
  * Quyền camera có đang bị CHẶN không (state 'denied' của Permissions API).
  * Chặn ≠ từ chối tạm: khi bị chặn, getUserMedia không hiện popup nữa.
@@ -413,6 +422,11 @@ export default function CameraHome() {
    */
   function createLink() {
     if (shots.length === 0) return;
+    // Chặn ngay ở client nếu vượt 100MB — khỏi tải lên rồi mới bị server từ chối.
+    if (shotsRef.current.reduce((n, s) => n + s.blob.size, 0) > MAX_TOTAL_BYTES) {
+      setError('Tổng dung lượng vượt 100MB — hãy xoá bớt ảnh/video rồi thử lại.');
+      return;
+    }
     const code = reservedCode; // có thể null nếu reserve chưa xong / lỗi
     const url = code ? `/v/${code}` : '';
 
@@ -440,19 +454,81 @@ export default function CameraHome() {
   /** Upload ảnh + niêm phong. Gắn vào mã đã đặt (nếu có). Cập nhật uploadStatus. */
   async function uploadSealed(code: string | null) {
     setUploadStatus('uploading');
-    const data = new FormData();
-    for (const s of shotsRef.current) {
-      const ext = s.kind === 'photo' ? 'jpg' : s.blob.type.split(';')[0] === 'video/mp4' ? 'mp4' : 'webm';
-      const type = s.kind === 'photo' ? 'image/jpeg' : s.blob.type.split(';')[0] || 'video/webm';
-      data.append('media', new File([s.blob], `${s.id}.${ext}`, { type }));
-    }
-    data.set('capturedAt', new Date().toISOString());
-    if (code) data.set('code', code);
-    if (shopName.trim()) data.set('shopName', shopName.trim());
-    if (categoryId) data.set('categoryId', categoryId);
-    if (note.trim()) data.set('note', note.trim());
+    setError(null);
+
+    // Metadata mỗi mục. id đánh theo THỨ TỰ (i0, i1…) để khớp key R2 server tính.
+    const media = shotsRef.current.map((s, i) => ({
+      id: `i${i}`,
+      blob: s.blob,
+      mimeType: s.kind === 'photo' ? 'image/jpeg' : s.blob.type.split(';')[0] || 'video/webm',
+    }));
 
     try {
+      // (A) Ưu tiên tải THẲNG lên R2 để không dính giới hạn body ~4.5MB của
+      //     serverless (video Full HD/iOS hay vượt). Cần mã đặt trước để tạo key.
+      if (code) {
+        const urlRes = await fetch('/api/upload-url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, items: media.map((m) => ({ id: m.id, mimeType: m.mimeType })) }),
+        });
+        const urlJson = await urlRes.json().catch(() => null);
+
+        if (urlRes.ok && urlJson?.mode === 'r2') {
+          const byId = new Map(media.map((m) => [m.id, m]));
+          for (const up of urlJson.uploads as { id: string; url: string }[]) {
+            const m = byId.get(up.id);
+            if (!m) continue;
+            const put = await fetch(up.url, {
+              method: 'PUT',
+              body: m.blob,
+              headers: { 'Content-Type': m.mimeType },
+            });
+            if (!put.ok) throw new Error(`R2 PUT ${put.status}`);
+          }
+
+          // Bytes đã ở R2 — niêm phong chỉ bằng metadata (không kèm file).
+          const sealRes = await fetch('/api/seal', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              code,
+              shopName: shopName.trim() || undefined,
+              note: note.trim() || undefined,
+              categoryId: categoryId || undefined,
+              items: media.map((m) => ({ id: m.id, mimeType: m.mimeType })),
+            }),
+          });
+          const sealJson = await sealRes.json().catch(() => null);
+          if (!sealRes.ok) {
+            setUploadStatus('error');
+            setError(sealJson?.error || 'Lưu ảnh thất bại.');
+            return;
+          }
+          setUploadStatus('ok');
+          return;
+        }
+        // mode === 'local' hoặc lỗi cấp URL -> rơi xuống đường multipart bên dưới.
+      }
+
+      // (B) Đường cũ (local/dev, hoặc chưa có mã): gửi bytes qua multipart.
+      const data = new FormData();
+      for (const m of media) {
+        const ext =
+          m.mimeType === 'image/jpeg'
+            ? 'jpg'
+            : m.mimeType === 'video/mp4'
+              ? 'mp4'
+              : m.mimeType === 'video/quicktime'
+                ? 'mov'
+                : 'webm';
+        data.append('media', new File([m.blob], `${m.id}.${ext}`, { type: m.mimeType }));
+      }
+      if (code) data.set('code', code);
+      if (shopName.trim()) data.set('shopName', shopName.trim());
+      if (categoryId) data.set('categoryId', categoryId);
+      if (note.trim()) data.set('note', note.trim());
+
       const res = await fetch('/api/seal', { method: 'POST', body: data });
       const json = await res.json();
       if (!res.ok) {
@@ -636,6 +712,8 @@ export default function CameraHome() {
     const current = shots.find((s) => s.id === previewId) ?? shots[0];
     const curIdx = Math.max(0, shots.findIndex((s) => s.id === current?.id));
     const multi = shots.length > 1;
+    const totalBytes = shots.reduce((n, s) => n + s.blob.size, 0);
+    const overLimit = totalBytes > MAX_TOTAL_BYTES;
     const goTo = (i: number) => {
       if (i >= 0 && i < shots.length) setPreviewId(shots[i].id);
     };
@@ -757,11 +835,18 @@ export default function CameraHome() {
               {error}
             </div>
           )}
+          {shots.length > 0 && (
+            <p className={`rv-size${overLimit ? ' over' : ''}`}>
+              Tổng dung lượng: {formatSize(totalBytes)} / {formatSize(MAX_TOTAL_BYTES)}
+              {overLimit && ' — vượt giới hạn, hãy xoá bớt ảnh/video'}
+            </p>
+          )}
           <button
             className="btn"
             style={{ width: '100%' }}
             onClick={createLink}
-            disabled={shots.length === 0}
+            disabled={shots.length === 0 || overLimit}
+            title={overLimit ? 'Tổng dung lượng vượt 100MB — hãy xoá bớt mục' : undefined}
           >
             🔒 Tạo link ({shots.length})
           </button>
