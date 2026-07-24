@@ -901,6 +901,9 @@ h1.title {
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
+  /* Chỉ cho vuốt ngang đổi ảnh — chặn trình duyệt cuốn trang dọc khi khách
+     chạm vào khung ảnh, tránh cảm giác lung lay như màn tạo link. */
+  touch-action: pan-x;
 }
 .gallery-track::-webkit-scrollbar { display: none; }
 .slide {
@@ -1766,6 +1769,7 @@ h1.title {
   display: grid;
   place-items: center;
   animation: fade 0.15s both;
+  touch-action: pan-x;
 }
 .lightbox {
   cursor: zoom-out; /* nền: chạm để đóng */
