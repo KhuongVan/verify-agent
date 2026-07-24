@@ -8,11 +8,10 @@ import ConsentBanner from '@/components/ConsentBanner';
 import { getConsent } from '@/lib/consent-server';
 import { resolveFbc, sendMetaEvent } from '@/lib/meta-capi';
 import { verify, type SealedFacts } from '@/lib/seal';
-import { countByShop, getAlbum } from '@/lib/store';
+import { getAlbum } from '@/lib/store';
 import { formatVN, mediaUrl } from '@/lib/util';
 import Gallery, { type Slide } from './Gallery';
 import PendingWatcher from './PendingWatcher';
-import SealCheck from './SealCheck';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -106,10 +105,6 @@ export default async function VerifyPage({
     return verify(facts, i.signatureB64);
   });
 
-  const shopName = album.shopName ?? 'Shop demo';
-  const shopCount = await countByShop(shopName);
-  const avatar = shopName.trim().charAt(0).toUpperCase() || 'S';
-
   // Media tải THẲNG từ R2 (custom domain) -> egress miễn phí, không qua Vercel.
   const slides: Slide[] = album.items.map((i) => ({
     id: i.id,
@@ -161,21 +156,6 @@ export default async function VerifyPage({
         </div>
       </div>
 
-      <div className="vp-shop">
-        <span className="av" aria-hidden>
-          {avatar}
-        </span>
-        <div className="who">
-          <b>
-            {shopName}
-            <span className="chk" aria-label="Đã xác thực">
-              ✓
-            </span>
-          </b>
-          <span>{shopCount} album đã xác thực trên Ảnh Thật</span>
-        </div>
-      </div>
-
       {(album.sellerNote || album.clientLocation) && (
         <section className="vp-note">
           <div className="vp-label">Mô tả từ người bán</div>
@@ -183,10 +163,6 @@ export default async function VerifyPage({
           {album.clientLocation && <p className="quiet">Vị trí tự khai: {album.clientLocation}</p>}
         </section>
       )}
-
-      <div className="vp-sealbox">
-        <SealCheck code={album.code} />
-      </div>
 
       <div className="vp-disclaimer">
         <span className="ic" aria-hidden>
