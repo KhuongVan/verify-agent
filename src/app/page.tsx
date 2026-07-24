@@ -60,7 +60,15 @@ function qualityLabel(width: number, height: number): string {
 }
 
 function pickMime(): string {
-  const cands = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'];
+  // iOS (mọi trình duyệt đều là WebKit): PHẢI ưu tiên mp4/H.264 — định dạng iOS
+  // phát native, có duration chuẩn. iOS đời mới có thể nhận webm khi QUAY nhưng
+  // PHÁT lại chập chờn (hiện "Lỗi", thanh tua hỏng) — nên webm chỉ là đường lùi.
+  const ios =
+    /iP(hone|ad|od)/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const cands = ios
+    ? ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp8,opus', 'video/webm']
+    : ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'];
   for (const c of cands) {
     if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(c)) return c;
   }
