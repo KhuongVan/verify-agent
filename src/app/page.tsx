@@ -60,15 +60,19 @@ function qualityLabel(width: number, height: number): string {
 }
 
 function pickMime(): string {
-  // iOS (mọi trình duyệt đều là WebKit): PHẢI ưu tiên mp4/H.264 — định dạng iOS
-  // phát native, có duration chuẩn. iOS đời mới có thể nhận webm khi QUAY nhưng
-  // PHÁT lại chập chờn (hiện "Lỗi", thanh tua hỏng) — nên webm chỉ là đường lùi.
-  const ios =
-    /iP(hone|ad|od)/.test(navigator.userAgent) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  const cands = ios
-    ? ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp8,opus', 'video/webm']
-    : ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'];
+  // Ưu tiên mp4/H.264 trên MỌI máy, không riêng iOS: người bán quay trên Android
+  // nhưng khách mở link có thể dùng iPhone — webm trên iOS phát chập chờn ("Lỗi",
+  // thanh tua hỏng), còn mp4/H.264 phát native ở mọi nơi. Kèm AAC trước để chắc
+  // cả tiếng lẫn hình đều tương thích iOS. Máy Android đời cũ không ghi được mp4
+  // thì isTypeSupported trả false -> tự lùi về webm như trước, không mất gì.
+  const cands = [
+    'video/mp4;codecs=avc1,mp4a.40.2', // H.264 + AAC — phát được mọi nơi
+    'video/mp4;codecs=avc1',
+    'video/mp4',
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm',
+  ];
   for (const c of cands) {
     if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(c)) return c;
   }
