@@ -796,6 +796,13 @@ h1.title {
   object-fit: cover;
   display: block;
 }
+/* Ô đen thay cho preview video ở màn kết quả (tránh dựng nhiều <video>). */
+.dp-vid-ph {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: #1c1c1c;
+}
 .dp-vid {
   position: absolute;
   right: 6px;
@@ -1642,6 +1649,13 @@ h1.title {
   height: 100%;
   object-fit: cover;
   display: block;
+}
+/* Ô đen thay cho thumbnail video (không dựng <video> vì iOS giới hạn). */
+.rv-thumb-vid {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: #1c1c1c;
 }
 .rv-thumb-pick .v {
   position: absolute;

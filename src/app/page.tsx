@@ -738,29 +738,29 @@ export default function CameraHome() {
         </header>
 
         {/* Khung xem lớn — vuốt hoặc bấm mũi tên để đổi mục. Xoá ở thumbnail dưới.
-            Giữ SẴN mọi mục (như album bên khách), chỉ ẩn/hiện — đổi mục không phải
-            dựng lại thẻ <video>/<img> nên không còn giật khi chuyển sang video. */}
+            ẢNH giữ sẵn mọi mục (chỉ ẩn/hiện) nên đổi ảnh không giật. VIDEO thì CHỈ
+            dựng thẻ <video> cho mục ĐANG xem: iOS Safari giới hạn số video tải cùng
+            lúc, quá thì các thẻ dư báo "Lỗi" — nên mỗi lúc chỉ 1 video sống. Khung
+            cao cố định nên đổi mục vẫn không nhảy layout. */}
         <div
           ref={rvStageRef}
           className="rv-stage"
           onTouchStart={(e) => (touchXRef.current = e.touches[0].clientX)}
           onTouchEnd={onTouchEnd}
         >
-          {shots.map((s) => (
-            <div
-              key={s.id}
-              className="rv-media"
-              data-shot-id={s.id}
-              hidden={s.id !== current?.id}
-            >
-              {s.kind === 'photo' ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={s.url} alt="Mục vừa chụp" onClick={() => setZoomed(true)} />
-              ) : (
-                <video src={s.url} controls playsInline preload="metadata" />
-              )}
-            </div>
-          ))}
+          {shots.map((s) => {
+            const isCurrent = s.id === current?.id;
+            return (
+              <div key={s.id} className="rv-media" data-shot-id={s.id} hidden={!isCurrent}>
+                {s.kind === 'photo' ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={s.url} alt="Mục vừa chụp" onClick={() => setZoomed(true)} />
+                ) : isCurrent ? (
+                  <video src={s.url} controls playsInline preload="metadata" />
+                ) : null}
+              </div>
+            );
+          })}
 
           {current?.kind === 'photo' && (
             <span className="rv-zoom-hint" aria-hidden>
@@ -809,7 +809,9 @@ export default function CameraHome() {
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={s.url} alt="" />
                   ) : (
-                    <video src={s.url} muted playsInline preload="metadata" />
+                    // Không dựng <video> cho thumbnail: mỗi thẻ video tốn 1 suất tải
+                    // media, iOS giới hạn số video cùng lúc -> ô đen + ▶ là đủ nhận biết.
+                    <span className="rv-thumb-vid" aria-hidden />
                   )}
                   {s.kind === 'video' && (
                     <span className="v" aria-hidden>
@@ -943,7 +945,8 @@ export default function CameraHome() {
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={s.url} alt="" loading="lazy" decoding="async" />
                   ) : (
-                    <video src={s.url} muted playsInline preload="metadata" />
+                    // Ô đen thay <video>: tránh dựng nhiều thẻ video (iOS giới hạn).
+                    <span className="dp-vid-ph" aria-hidden />
                   )}
                   {s.kind === 'video' && (
                     <span className="dp-vid" aria-hidden>
