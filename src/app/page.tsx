@@ -9,7 +9,6 @@ import {
 
 import Link from 'next/link';
 
-import { CATEGORIES } from '@/lib/categories';
 import { androidBrowserIntent, detectInApp, iosSafariUrl, type InAppInfo } from '@/lib/inapp';
 
 /**
@@ -398,7 +397,7 @@ export default function CameraHome() {
    * Nhờ đã đặt mã trước (reservedCode) nên URL có sẵn ngay ở bước 1.
    */
   function createLink() {
-    if (shots.length === 0 || !categoryId) return;
+    if (shots.length === 0) return;
     const code = reservedCode; // có thể null nếu reserve chưa xong / lỗi
     const url = code ? `/v/${code}` : '';
 
@@ -752,43 +751,6 @@ export default function CameraHome() {
           </div>
         )}
 
-        <div className="rv-form">
-          <div className="field">
-            <label htmlFor="categoryId">Ngành hàng</label>
-            <select
-              id="categoryId"
-              value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-            >
-              <option value="">— Chọn ngành hàng —</option>
-              {CATEGORIES.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="field">
-            <label htmlFor="shopName">Tên shop (tuỳ chọn)</label>
-            <input
-              id="shopName"
-              type="text"
-              value={shopName}
-              onChange={(e) => setShopName(e.target.value)}
-              placeholder="Lux House · Sài Gòn"
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="note">Mô tả (tuỳ chọn — hiển thị tách bạch)</label>
-            <textarea
-              id="note"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="Chanel Classic Flap Medium, fullset box & card..."
-            />
-          </div>
-        </div>
-
         <div className="rv-foot">
           {error && (
             <div className="notice err" style={{ marginBottom: 12 }}>
@@ -799,8 +761,7 @@ export default function CameraHome() {
             className="btn"
             style={{ width: '100%' }}
             onClick={createLink}
-            disabled={shots.length === 0 || !categoryId}
-            title={!categoryId ? 'Hãy chọn ngành hàng trước' : undefined}
+            disabled={shots.length === 0}
           >
             🔒 Tạo link ({shots.length})
           </button>
