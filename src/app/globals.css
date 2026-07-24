@@ -1486,14 +1486,19 @@ h1.title {
   background: #000;
   display: grid;
   place-items: center;
-  min-height: 46dvh;
-  max-height: 60dvh;
+  /* svh (không phải dvh): chiều cao không đổi khi thanh địa chỉ ẩn/hiện lúc
+     vuốt, tránh khung bị "nhảy"/rung theo chiều dọc khi thao tác tay. */
+  min-height: 46svh;
+  max-height: 60svh;
   overflow: hidden;
+  /* Chỉ cho cử chỉ ngang bắt đầu từ khung này — chặn trình duyệt cuốn trang
+     theo chiều dọc khi người dùng vuốt đổi ảnh, tránh cảm giác lung lay. */
+  touch-action: pan-x;
 }
 .rv-stage img,
 .rv-stage video {
   width: 100%;
-  max-height: 60dvh;
+  max-height: 60svh;
   object-fit: contain;
   display: block;
   background: #000;
