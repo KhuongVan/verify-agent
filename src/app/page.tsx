@@ -681,13 +681,18 @@ export default function CameraHome() {
             (current.kind === 'photo' ? (
               <>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={current.url} alt="Mục vừa chụp" onClick={() => setZoomed(true)} />
+                <img
+                  key={current.id}
+                  src={current.url}
+                  alt="Mục vừa chụp"
+                  onClick={() => setZoomed(true)}
+                />
                 <span className="rv-zoom-hint" aria-hidden>
                   ⛶
                 </span>
               </>
             ) : (
-              <video src={current.url} controls playsInline preload="metadata" />
+              <video key={current.id} src={current.url} controls playsInline preload="metadata" />
             ))}
 
           {multi && (
@@ -731,7 +736,7 @@ export default function CameraHome() {
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={s.url} alt="" />
                   ) : (
-                    <video src={s.url} muted playsInline />
+                    <video src={s.url} muted playsInline preload="metadata" />
                   )}
                   {s.kind === 'video' && (
                     <span className="v" aria-hidden>
@@ -780,9 +785,15 @@ export default function CameraHome() {
             </button>
             {current.kind === 'photo' ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={current.url} alt="Xem toàn màn hình" onClick={(e) => e.stopPropagation()} />
+              <img
+                key={current.id}
+                src={current.url}
+                alt="Xem toàn màn hình"
+                onClick={(e) => e.stopPropagation()}
+              />
             ) : (
               <video
+                key={current.id}
                 src={current.url}
                 controls
                 playsInline
