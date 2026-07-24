@@ -2,6 +2,8 @@
 
 import { useRef, useState } from 'react';
 
+import { fixInfiniteDuration } from '@/lib/videoDuration';
+
 export type Slide = { id: string; kind: 'photo' | 'video'; src: string };
 
 /**
@@ -45,7 +47,13 @@ export default function Gallery({ slides }: { slides: Slide[] }) {
         {slides.map((s) => (
           <div className="slide" key={s.id}>
             {s.kind === 'video' ? (
-              <video src={s.src} controls playsInline preload="metadata" />
+              <video
+                src={s.src}
+                controls
+                playsInline
+                preload="metadata"
+                onLoadedMetadata={fixInfiniteDuration}
+              />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -92,7 +100,14 @@ export default function Gallery({ slides }: { slides: Slide[] }) {
             // eslint-disable-next-line @next/next/no-img-element
             <img src={current.src} alt="Xem toàn màn hình" onClick={(e) => e.stopPropagation()} />
           ) : (
-            <video src={current.src} controls playsInline autoPlay onClick={(e) => e.stopPropagation()} />
+            <video
+              src={current.src}
+              controls
+              playsInline
+              autoPlay
+              onLoadedMetadata={fixInfiniteDuration}
+              onClick={(e) => e.stopPropagation()}
+            />
           )}
           {!single && (
             <>

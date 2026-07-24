@@ -10,6 +10,7 @@ import {
 import Link from 'next/link';
 
 import { androidBrowserIntent, detectInApp, iosSafariUrl, type InAppInfo } from '@/lib/inapp';
+import { fixInfiniteDuration } from '@/lib/videoDuration';
 
 /**
  * Trang chủ = màn hình chụp kiểu camera điện thoại.
@@ -756,7 +757,13 @@ export default function CameraHome() {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={s.url} alt="Mục vừa chụp" onClick={() => setZoomed(true)} />
                 ) : isCurrent ? (
-                  <video src={s.url} controls playsInline preload="metadata" />
+                  <video
+                    src={s.url}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    onLoadedMetadata={fixInfiniteDuration}
+                  />
                 ) : null}
               </div>
             );
@@ -880,6 +887,7 @@ export default function CameraHome() {
                 controls
                 playsInline
                 autoPlay
+                onLoadedMetadata={fixInfiniteDuration}
                 onClick={(e) => e.stopPropagation()}
               />
             )}
