@@ -517,36 +517,7 @@ export default function CameraHome() {
             nhé!
           </p>
 
-          {inApp.os === 'ios' ? (
-            <ol className="intro-steps" style={{ marginTop: 26 }}>
-              <li>
-                <span className="n">1</span>
-                <div>
-                  <b>Bấm nút ⋯ hoặc ⇱ ở góc màn hình</b>
-                  <span>Thường nằm ở góc trên bên phải, hoặc thanh dưới cùng.</span>
-                </div>
-              </li>
-              <li>
-                <span className="n">2</span>
-                <div>
-                  <b>Chọn “Mở trong Safari” hoặc “Mở bằng trình duyệt”</b>
-                  <span>Sau đó chụp/quay như bình thường.</span>
-                </div>
-              </li>
-            </ol>
-          ) : (
-            <ol className="intro-steps" style={{ marginTop: 26 }}>
-              <li>
-                <span className="n">1</span>
-                <div>
-                  <b>Bấm nút bên dưới để mở trình duyệt</b>
-                  <span>Nếu không mở được thì bấm ⋮ ở góc rồi chọn “Mở bằng trình duyệt”.</span>
-                </div>
-              </li>
-            </ol>
-          )}
-
-          <div className="intro-foot">
+          <div className="intro-foot" style={{ marginTop: 32 }}>
             {copied && <p className="done-copied">✓ Đã sao chép link</p>}
 
             {inApp.os === 'android' ? (
@@ -567,7 +538,7 @@ export default function CameraHome() {
                       setCopied(true);
                       setTimeout(() => setCopied(false), 3000);
                     } catch {
-                      /* clipboard bị chặn — vẫn còn 2 bước hướng dẫn ở trên */
+                      /* clipboard bị chặn — vẫn còn nút "Mở bằng trình duyệt" ở trên */
                     }
                   }}
                 >
