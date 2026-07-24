@@ -409,11 +409,13 @@ export default function CameraHome() {
         .catch(() => {});
     }
 
-    // (2) Sang màn kết quả ngay. count/url tạm theo mã đã đặt; nếu chưa có mã,
-    // uploadSealed sẽ điền lại từ phản hồi server.
+    // (2) Sang màn kết quả ngay. LUÔN setResult — kể cả khi chưa có mã đặt trước
+    // (reserve chưa xong/lỗi) — để màn kết quả HIỆN thay vì rơi về màn chụp. Mã/URL
+    // để rỗng, uploadSealed sẽ điền từ phản hồi server; trong lúc chờ, màn kết quả
+    // hiện trạng thái "đang tạo link…".
     stopStream();
     setError(null);
-    if (code) setResult({ code, url, count: shots.length });
+    setResult({ code: code ?? '', url: code ? url : '', count: shots.length });
     setPhase('done');
 
     // (3) Upload nền.
@@ -809,6 +811,9 @@ export default function CameraHome() {
 
   // ---- Màn hình kết quả ----
   if (phase === 'done' && result) {
+    // Link đã sẵn sàng khi có mã: lúc bấm "Tạo link" mà reserve chưa xong thì
+    // result.code còn rỗng — hiện trạng thái chờ, tránh link/nút hỏng.
+    const linkReady = !!result.code;
     const full = typeof window !== 'undefined' ? `${window.location.origin}${result.url}` : result.url;
     // Bỏ "https://" cho dễ đọc — người bán chỉ cần nhận ra link của mình.
     const shown = full.replace(/^https?:\/\//, '');
@@ -858,25 +863,36 @@ export default function CameraHome() {
             </div>
           )}
 
-          <div className="link-box">
-            <span className="link-text">{shown}</span>
-            <button className="btn-copy" onClick={copyLink}>
-              {copied ? '✓ Đã sao chép' : 'Sao chép'}
-            </button>
-          </div>
+          {linkReady ? (
+            <>
+              <div className="link-box">
+                <span className="link-text">{shown}</span>
+                <button className="btn-copy" onClick={copyLink}>
+                  {copied ? '✓ Đã sao chép' : 'Sao chép'}
+                </button>
+              </div>
 
-          <div className="done-actions">
-            {copied && <p className="done-copied">✓ Đã sao chép link</p>}
-            <button className="btn-share" onClick={shareLink}>
-              Chia sẻ link cho khách
-            </button>
-            <Link className="link-quiet" href={result.url}>
-              Xem trước như khách hàng
-            </Link>
-            <button className="link-quiet" onClick={startNew}>
-              + Album mới
-            </button>
-          </div>
+              <div className="done-actions">
+                {copied && <p className="done-copied">✓ Đã sao chép link</p>}
+                <button className="btn-share" onClick={shareLink}>
+                  Chia sẻ link cho khách
+                </button>
+                <Link className="link-quiet" href={result.url}>
+                  Xem trước như khách hàng
+                </Link>
+                <button className="link-quiet" onClick={startNew}>
+                  + Album mới
+                </button>
+              </div>
+            </>
+          ) : (
+            uploadStatus !== 'error' && (
+              <div className="link-box pending">
+                <span className="spin" aria-hidden />
+                <span className="link-text">Đang tạo link…</span>
+              </div>
+            )
+          )}
         </div>
       </main>
     );

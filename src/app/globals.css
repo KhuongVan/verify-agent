@@ -835,6 +835,26 @@ h1.title {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Trạng thái chờ khi bấm "Tạo link" mà mã chưa kịp về từ server. */
+.link-box.pending {
+  justify-content: center;
+  gap: 10px;
+  color: var(--ink-mute);
+}
+.link-box.pending .link-text {
+  flex: none;
+  font-family: var(--font-ui);
+  color: var(--ink-mute);
+}
+.link-box.pending .spin {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  border-top-color: var(--verify);
+  animation: vp-spin 0.8s linear infinite;
+}
 .btn-copy {
   all: unset;
   cursor: pointer;
