@@ -1530,6 +1530,15 @@ h1.title {
      theo chiều dọc khi người dùng vuốt đổi ảnh, tránh cảm giác lung lay. */
   touch-action: pan-x;
 }
+/* Mỗi mục là một lớp phủ kín khung; chỉ mục đang xem hiện (không [hidden]).
+   Giữ sẵn tất cả nên đổi mục không phải dựng lại thẻ media -> hết giật. */
+.rv-media {
+  position: absolute;
+  inset: 0;
+}
+.rv-media[hidden] {
+  display: none;
+}
 /* Định vị tuyệt đối lấp đầy khung rồi để object-fit canh giữa: video mới mount
    dù chưa có kích thước nội tại vẫn chiếm trọn khung (nền đen), không làm khung
    sập rồi bung -> không còn cú nhảy layout khi chuyển sang video. */

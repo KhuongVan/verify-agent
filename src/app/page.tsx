@@ -71,6 +71,8 @@ export default function CameraHome() {
   const reservingRef = useRef(false);
   /** Toạ độ X lúc bắt đầu chạm — để nhận cử chỉ vuốt đổi ảnh ở màn Xem lại. */
   const touchXRef = useRef<number | null>(null);
+  /** Khung xem lớn ở màn Xem lại — để tạm dừng các video đang ẩn khi đổi mục. */
+  const rvStageRef = useRef<HTMLDivElement>(null);
 
   const [facing, setFacing] = useState<Facing>('environment');
   const [mode, setMode] = useState<Mode>('photo');
@@ -212,6 +214,19 @@ export default function CameraHome() {
   useEffect(() => {
     if (phase !== 'review') setZoomed(false);
   }, [phase]);
+
+  // Khung xem lớn giữ SẴN mọi mục (không tháo/dựng lại khi đổi -> hết giật). Mặt
+  // trái: video đang phát mà đổi mục sẽ tiếp tục chạy tiếng dưới nền -> tạm dừng
+  // mọi video không phải mục đang xem.
+  useEffect(() => {
+    if (phase !== 'review') return;
+    const stage = rvStageRef.current;
+    if (!stage) return;
+    const currentId = previewId ?? shots[0]?.id;
+    stage.querySelectorAll('video').forEach((v) => {
+      if (v.closest('.rv-media')?.getAttribute('data-shot-id') !== currentId) v.pause();
+    });
+  }, [phase, previewId, shots]);
 
   // Đóng tab lúc ảnh chưa upload xong sẽ để link dang dở — cảnh báo trước.
   useEffect(() => {
@@ -644,29 +659,36 @@ export default function CameraHome() {
           </button>
         </header>
 
-        {/* Khung xem lớn — vuốt hoặc bấm mũi tên để đổi mục. Xoá ở thumbnail dưới. */}
+        {/* Khung xem lớn — vuốt hoặc bấm mũi tên để đổi mục. Xoá ở thumbnail dưới.
+            Giữ SẴN mọi mục (như album bên khách), chỉ ẩn/hiện — đổi mục không phải
+            dựng lại thẻ <video>/<img> nên không còn giật khi chuyển sang video. */}
         <div
+          ref={rvStageRef}
           className="rv-stage"
           onTouchStart={(e) => (touchXRef.current = e.touches[0].clientX)}
           onTouchEnd={onTouchEnd}
         >
-          {current &&
-            (current.kind === 'photo' ? (
-              <>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  key={current.id}
-                  src={current.url}
-                  alt="Mục vừa chụp"
-                  onClick={() => setZoomed(true)}
-                />
-                <span className="rv-zoom-hint" aria-hidden>
-                  ⛶
-                </span>
-              </>
-            ) : (
-              <video key={current.id} src={current.url} controls playsInline preload="metadata" />
-            ))}
+          {shots.map((s) => (
+            <div
+              key={s.id}
+              className="rv-media"
+              data-shot-id={s.id}
+              hidden={s.id !== current?.id}
+            >
+              {s.kind === 'photo' ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={s.url} alt="Mục vừa chụp" onClick={() => setZoomed(true)} />
+              ) : (
+                <video src={s.url} controls playsInline preload="metadata" />
+              )}
+            </div>
+          ))}
+
+          {current?.kind === 'photo' && (
+            <span className="rv-zoom-hint" aria-hidden>
+              ⛶
+            </span>
+          )}
 
           {multi && (
             <>
