@@ -1556,6 +1556,16 @@ h1.title {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
+/* Trong lightbox, góc trên-phải đã có nút ✕ (.lb-close) ở gần như cùng toạ
+   độ — hai nền mờ chồng nhau tạo thành mảng đen loang lổ. Dời số đếm xuống
+   giữa đáy màn hình để không đè lên nút đóng. */
+.lightbox .rv-counter {
+  top: auto;
+  right: auto;
+  left: 50%;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+}
 
 /* Dải chọn mục — cuộn ngang, mục đang xem có viền xanh. */
 .rv-strip {
