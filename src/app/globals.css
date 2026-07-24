@@ -907,16 +907,27 @@ h1.title {
 }
 .gallery-track::-webkit-scrollbar { display: none; }
 .slide {
+  position: relative;
   flex: 0 0 100%;
   scroll-snap-align: center;
   aspect-ratio: 3 / 4;
-  max-height: 66dvh;
-  display: grid;
-  place-items: center;
+  max-height: 66svh;
+  overflow: hidden;
   background: #000;
 }
+/* position:absolute + inset:0 thay vì grid place-items: Safari canh sai tâm
+   ảnh/video khi kết hợp CSS Grid với aspect-ratio, đẩy hình dồn xuống đáy
+   khung. Định vị tuyệt đối lấp đầy khung rồi để object-fit tự canh giữa thì
+   ổn định trên mọi trình duyệt. */
 .slide img,
-.slide video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+.slide video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
 .gallery-count {
   position: absolute;
   top: 12px;
